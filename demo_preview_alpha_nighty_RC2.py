@@ -359,145 +359,59 @@ class NPC(BaseModel):
         # If the target space is not connected, return an error message
         return f"Cannot move to {target_space_name}. It is not connected to {self.current_space.name}."
 
-    def interact_with_item(self, action_data: Dict[str, Dict[str, Optional[Dict[str, Any]]]]) -> str:
-        """
-        Handle item interaction based on AI's structured decision
-        
-        action_data format example:
-        {
-            "diary": {
-                "write": {"content": "Hello world"}
-            }
-        }
-        """
-        # Since AI can only choose one item and one interaction, we can get them directly
-        item_name = next(iter(action_data))  # Gets the only item name
-        interaction_dict = action_data[item_name]
-        interaction_type = next(iter(interaction_dict))  # Gets the only interaction type
-        parameters = interaction_dict[interaction_type]  # Gets parameters if any
-
-        # Find the item in current space or inventory
-        target_item = None
-        for item in self.current_space.items + self.inventory.items:
-            if item.name == item_name:
-                target_item = item
-                break
-
-        if not target_item:
-            return f"Cannot find {item_name} in current space or inventory."
-
-        # Use the item's interact method with or without parameters
-        if parameters:
-            return target_item.interact(interaction_type, **parameters)
-        else:
-            return target_item.interact(interaction_type)
-
-    def talk_to_npc(self, target_npc_name: str, dialogue: str) -> str:
-        """
-        Handle talking to another NPC in the same space.
-        """
-        target_npc_name = target_npc_name.lower()
-
-        # Find the target NPC in the current space
-        for npc in self.current_space.npcs:
-            if npc.name.lower() == target_npc_name:
-                # Add the dialogue to the target NPC's history
-                npc.history.append({"role": "user", "content": f"{self.name}: {dialogue}"})
-
-                # Return a success message
-                return f"You talked to {npc.name}: \"{dialogue}\""
-
-        # If the target NPC is not found, return an error message
-        return f"Cannot talk to {target_npc_name}. They are not in the same space."
-
-
     def process_tick(self, user_input: Optional[str] = None):
-        """
-        Process AI's decision and execute corresponding actions.
-        """
         # Get valid options from current state
         valid_spaces = [space.name for space in self.current_space.connected_spaces]
         valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
         available_items = self.current_space.items + self.inventory.items
 
-
-        # Assume BaseItemInteraction is a simple base class (adjust if yours differs)
-        class BaseItemInteraction(BaseModel):
-            item_name: str
-            action: Dict[str, Optional[Dict[str, Any]]]
-
-        # Dictionary to store item-specific interaction classes
-        item_interaction_classes = {}
-
-        # Dynamically create a schema for each item
+        # --- Dynamic Item Interaction Schemas ---
+        item_classes = {}
         for item in available_items:
-            # Define the class dynamically using type()
-            NewInteraction = type(
-                f"{item.name.capitalize()}Interaction",
-                (BaseItemInteraction,),
+            # Second layer: Item-specific class (e.g., ArthurBook)
+            action_classes = {}
+            for action_name, param_spec in item.interactions.items():
+                # Third layer: Action-specific class (e.g., Reading, Writing)
+                fields = {"action_name": Literal[action_name]}
+                
+                # Create class attributes dictionary
+                class_attrs = {
+                    "__annotations__": fields,
+                    "action_name": Field(default=..., description=f"Action: {action_name}")
+                }
+                
+                # Only add parameter field if parameters are required
+                if param_spec is not None:
+                    fields["parameter"] = str  # Add to annotations
+                    class_attrs["parameter"] = Field(default=..., description="Parameter for the action")
+                
+                action_class = type(
+                    action_name.capitalize(),  # e.g., "Read", "Write"
+                    (BaseModel,),
+                    class_attrs
+                )
+                action_classes[action_name] = action_class
+
+            # Second layer: Define the item class
+            item_class_name = item.name.replace("_", "").capitalize()  # e.g., "Arthurbook"
+            item_classes[item.name] = type(
+                item_class_name,
+                (BaseModel,),
                 {
                     "__annotations__": {
-                        "item_name": Literal[item.name],  # e.g., Literal["music_box"]
-                        # action is a dict with keys from item.interactions, values are None or dict
-                        "action": Dict[str, Optional[Dict[str, Any]]] # AI PAY Attention here: It seems this line is the probelm. It's way too complicated for pydantic to handle
-                    }
+                        "item_name": Literal[item.name],
+                        "action": Union[tuple(action_classes.values())]
+                    },
+                    "item_name": Field(default=..., description=f"Item: {item.name}")
                 }
             )
-            item_interaction_classes[item.name] = NewInteraction
 
-        # Define InteractItemAction by combining all item interaction classes
+        # First layer: InteractItemAction
         class InteractItemAction(BaseModel):
             action_type: Literal["interact_item"]
-            target_interaction: Union[tuple(item_interaction_classes.values())]
+            interact_with: Union[tuple(item_classes.values())]
 
-        # Rebuild the model to resolve forward references
-        InteractItemAction.model_rebuild()
-
-
-    # 先建立一個物品互動模型的共用基底
-    #     class BaseItemInteraction(BaseModel):
-    #         item_name: str
-    #         action: Dict[str, Optional[Dict[str, type]]]
-    #
-    #         model_config = {'discriminator': 'item_name'}
-    #
-    #     # 針對目前可用的物品動態產生各自的互動模型
-    #     item_interaction_classes = {}
-    #     for item in available_items:
-    #         class_name = f"{item.name.capitalize()}Interaction"
-    #         # 動態建立每個物品的互動模型，使用 Literal 限定 item_name，action 直接取自該物品的 interactions
-    #         NewInteraction = type(
-    #             class_name,
-    #             (BaseItemInteraction,),
-    #             {
-    #                 '__annotations__': {
-    #                     'item_name': Literal[item.name],
-    #                     'action': Dict[str, Optional[Dict[str, type]]],
-    #                 },
-    #                 'item_name': item.name,
-    #                 'action': item.interactions,
-    #             }
-    #         )
-    #         item_interaction_classes[item.name] = NewInteraction
-    #
-    #     # 定義 InteractItemAction，利用 Annotated + Field 指定 discriminator 讓 Union 能正確生成 schema
-    #     from pydantic import Field
-    #     from typing_extensions import Annotated
-    #
-    #     class InteractItemAction(BaseModel):
-    #         action_type: Literal["interact_item"]
-    #         target_interaction: Annotated[
-    #             Union[*item_interaction_classes.values()],
-    #             Field(discriminator="item_name")
-    #         ]
-    #
-    #     InteractItemAction.model_rebuild()
-
-                # Debug prints
-        print("\nValid spaces:", valid_spaces)
-        print("Valid NPCs:", valid_npcs)
-
-        # Define schemas directly here
+        # Static actions
         class EnterSpaceAction(BaseModel):
             action_type: Literal["enter_space"]
             target_space: Literal[*valid_spaces] if valid_spaces else str
@@ -507,14 +421,7 @@ class NPC(BaseModel):
             target_npc: Literal[*valid_npcs] if valid_npcs else str
             dialogue: str
 
-     
-        
-
-        print("Available items:", available_items)
-        print("Item interaction classes:", item_interaction_classes)
-        print("Item interaction values:", list(item_interaction_classes.values()))
-
-
+        # Top-level response
         class GeneralResponse(BaseModel):
             self_talk_reasoning: str
             action: Optional[Union[
@@ -523,63 +430,98 @@ class NPC(BaseModel):
                 TalkToNPCAction
             ]] = None
 
+        # History and AI call
         if self.first_tick:
             self.add_space_to_history()
             self.first_tick = False
         if user_input:
             self.history.append({"role": "user", "content": f"User: {user_input}"})
 
-        # Get AI's decision with our new schema
         completion = client.beta.chat.completions.parse(
             model="gpt-4o-2024-11-20",
             messages=self.history,
             response_format=GeneralResponse
         )
-
-        # Extract the response
         response = completion.choices[0].message.parsed
         
-        # Debug: Print complete response
         print("\n=== AI Response ===")
         print(response)
         print("==================\n")
 
-        # Add complete response to history
-        self.history.append({
-            "role": "assistant",
-            "content": str(response)
-        })
 
         # Handle the action
         if not response.action:
             print("No action taken")
             return "nothing happen"
 
-        # Process the action based on type
         action = response.action
         result = ""
-
         if isinstance(action, InteractItemAction):
-            # result = self.interact_with_item(action.target_item)
-            result = self.interact_with_item(action.target_interaction)
+            interact_with = action.interact_with
+            action_data = {
+                interact_with.item_name: {
+                    interact_with.action.action_name: (
+                        {"content": interact_with.action.parameter}
+                        if hasattr(interact_with.action, "parameter") else None
+                    )
+                }
+            }
+            result = self.interact_with_item(action_data)
         elif isinstance(action, EnterSpaceAction):
             result = self.move_to_space(action.target_space)
         elif isinstance(action, TalkToNPCAction):
             result = self.talk_to_npc(action.target_npc, action.dialogue)
 
-        # Add result to history
-        result_entry = {
-            "role": "system",
-            "content": result
-        }
-        self.history.append(result_entry)
-
-
-        # Debug: Print action result
+        self.history.append({"role": "system", "content": result})
         print("\n=== Action Result ===")
         print(result)
         print("===================\n")
-        return "--nothing happen--"
+        return result
+
+    def interact_with_item(self, action_data: Dict[str, Dict[str, Optional[Dict[str, Any]]]]) -> str:
+        """
+        Handle interactions with items based on the action data from process_tick.
+        
+        Args:
+            action_data: A dictionary with structure {item_name: {interaction_type: parameters_dict}}
+                         where parameters_dict is either None or a dictionary of parameter values
+        
+        Returns:
+            A string describing the result of the interaction
+        """
+        # Extract item name and interaction details
+        if not action_data:
+            return "No item interaction data provided."
+        
+        # Get the first (and only) item name and its interaction details
+        item_name = next(iter(action_data))
+        interaction_details = action_data[item_name]
+        
+        # Get the first (and only) interaction type and its parameters
+        interaction_type = next(iter(interaction_details))
+        parameters = interaction_details[interaction_type]
+        
+        # Find the item in inventory or current space
+        target_item = None
+        for item in self.inventory.items:
+            if item.name == item_name:
+                target_item = item
+                break
+        
+        if target_item is None:
+            for item in self.current_space.items:
+                if item.name == item_name:
+                    target_item = item
+                    break
+        
+        if target_item is None:
+            return f"Cannot find item '{item_name}' in inventory or current space."
+        
+        # Call the item's interact method with the appropriate parameters
+        if parameters:
+            return target_item.interact(interaction_type, **parameters)
+        else:
+            return target_item.interact(interaction_type)
 
 
 
