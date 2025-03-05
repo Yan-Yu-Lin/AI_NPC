@@ -79,6 +79,145 @@ class Item(BaseModel):
             return f"You stop the {self.name}."
         return f"The {self.name} cannot be stopped."
 
+    # New interaction methods for cooking_pot
+    def cook(self, ingredient: str) -> str:
+        """Cook something in the pot using the specified ingredient."""
+        if "contents" not in self.properties:
+            return f"The {self.name} cannot be used for cooking."
+        
+        if not self.properties.get("is_clean", False):
+            return f"The {self.name} is dirty and needs to be cleaned before cooking."
+        
+        self.properties["contents"] = ingredient
+        return f"You cook {ingredient} in the {self.name}. It smells delicious!"
+    
+    def examine(self) -> str:
+        """Examine an item closely (similar to inspect but with different wording)."""
+        if "contents" in self.properties and self.properties["contents"]:
+            return f"You examine the {self.name}: {self.description}. It contains {self.properties['contents']}."
+        return f"You examine the {self.name}: {self.description}"
+    
+    def clean(self) -> str:
+        """Clean the item."""
+        if "is_clean" not in self.properties:
+            return f"The {self.name} doesn't need cleaning."
+        
+        self.properties["is_clean"] = True
+        self.properties["contents"] = ""
+        return f"You clean the {self.name} thoroughly. It's now ready for use."
+    
+    # New interaction methods for watering_can
+    def fill(self) -> str:
+        """Fill the watering can with water."""
+        if "water_level" not in self.properties or "max_capacity" not in self.properties:
+            return f"The {self.name} cannot be filled with water."
+        
+        if self.properties["water_level"] >= self.properties["max_capacity"]:
+            return f"The {self.name} is already full."
+        
+        self.properties["water_level"] = self.properties["max_capacity"]
+        return f"You fill the {self.name} with water."
+    
+    def water(self, plant: str) -> str:
+        """Water a plant using the watering can."""
+        if "water_level" not in self.properties:
+            return f"The {self.name} cannot be used for watering."
+        
+        if self.properties["water_level"] <= 0:
+            return f"The {self.name} is empty. You need to fill it first."
+        
+        self.properties["water_level"] -= 1
+        return f"You water the {plant} with the {self.name}. The plant looks refreshed!"
+    
+    # New interaction methods for mysterious_device
+    def activate(self) -> str:
+        """Activate the device."""
+        if "is_active" not in self.properties:
+            return f"The {self.name} cannot be activated."
+        
+        if self.properties["is_active"]:
+            return f"The {self.name} is already active."
+        
+        self.properties["is_active"] = True
+        return f"You activate the {self.name}. It hums to life with a soft glow and mechanical whirring."
+    
+    def adjust(self, setting: str) -> str:
+        """Adjust the device settings."""
+        if "current_setting" not in self.properties:
+            return f"The {self.name} cannot be adjusted."
+        
+        if not self.properties.get("is_active", False):
+            return f"The {self.name} needs to be activated before adjusting settings."
+        
+        self.properties["current_setting"] = setting
+        return f"You adjust the {self.name} to the '{setting}' setting. The device's behavior changes subtly."
+    
+    def disassemble(self) -> str:
+        """Disassemble the device to examine its components."""
+        if "is_active" not in self.properties:
+            return f"The {self.name} cannot be disassembled."
+        
+        if self.properties.get("is_active", False):
+            return f"The {self.name} is currently active. You should deactivate it before disassembling."
+        
+        return f"You carefully disassemble the {self.name}, revealing intricate gears, circuits, and mysterious components. You reassemble it after your examination."
+    
+    # New interaction methods for tea_set
+    def use(self) -> str:
+        """Use the item (generic interaction)."""
+        if "is_brewing" in self.properties:
+            if self.properties["is_brewing"]:
+                return f"The {self.name} is already in use, brewing a fragrant tea."
+            
+            self.properties["is_brewing"] = True
+            return f"You prepare the {self.name} and start brewing a delightful tea. The aroma fills the air."
+        
+        if "is_filled" in self.properties:
+            if not self.properties["is_filled"]:
+                return f"The {self.name} is empty and needs to be filled first."
+            
+            return f"You use the {self.name} to water the nearby plants. They seem to appreciate it."
+        
+        if "is_focused" in self.properties:
+            self.properties["is_focused"] = True
+            return f"You use the {self.name}, adjusting it carefully. The view becomes crystal clear."
+        
+        return f"You use the {self.name}, but nothing particularly interesting happens."
+    
+    # New interaction methods for stone_bench
+    def sit(self) -> str:
+        """Sit on the item."""
+        return f"You sit on the {self.name} and take a moment to relax. It's quite comfortable and gives you a perfect view of the surroundings."
+    
+    # New interaction methods for old_chest
+    def open(self) -> str:
+        """Open the item if possible."""
+        if "is_locked" not in self.properties:
+            return f"The {self.name} cannot be opened."
+        
+        if self.properties["is_locked"]:
+            return f"The {self.name} is locked. You need to find a key or another way to unlock it."
+        
+        return f"You open the {self.name}, revealing its contents: old letters, photographs, and small trinkets from a bygone era."
+    
+    # New interaction methods for telescope
+    def adjust(self, **kwargs) -> str:
+        """Adjust the item (overloaded method that works for both telescope and mysterious_device)."""
+        if "is_focused" in self.properties:
+            self.properties["is_focused"] = True
+            return f"You carefully adjust the {self.name}, bringing distant objects into sharp focus."
+        
+        # For mysterious_device, reuse the existing adjust method logic
+        if "current_setting" in self.properties:
+            setting = kwargs.get("setting", "default")
+            if not self.properties.get("is_active", False):
+                return f"The {self.name} needs to be activated before adjusting settings."
+            
+            self.properties["current_setting"] = setting
+            return f"You adjust the {self.name} to the '{setting}' setting. The device's behavior changes subtly."
+        
+        return f"You adjust the {self.name}, but nothing seems to change."
+
 
 #TODO: Define Spaces
 
@@ -197,33 +336,63 @@ class NPC(BaseModel):
         ]] = None
 
 
-    def update_schema(self): # This is currently abandoned, ignore this part
+    def update_schema(self):
         """
-        Dynamically update schemas based on NPC's current state
+        Dynamically generate schemas based on NPC's current state.
+        Returns a GeneralResponse model with appropriate action schemas.
         """
         # Get valid options from current state
         valid_spaces = [space.name for space in self.current_space.connected_spaces]
         valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
         available_items = self.current_space.items + self.inventory.items
 
-        # 為每個物品動態創建互動 schema
-        # item_interaction_schemas = {}
-        # for item in available_items:
-        #     # 獲取該物品的所有互動方式
-        #     valid_interactions = list(item.interactions.keys())
-        #     
-        #     # 動態創建該物品的互動 schema
-        #     class_name = f"{item.name.capitalize()}Interactions"
-        #     item_interaction_schemas[item.name] = type(
-        #         class_name,
-        #         (BaseModel,),
-        #         {
-        #             "action": (Literal[*valid_interactions], ...),
-        #             "parameters": (Optional[Dict[str, Any]], None)
-        #         }
-        #     )
+        # --- Dynamic Item Interaction Schemas ---
+        item_classes = {}
+        for item in available_items:
+            # Second layer: Item-specific class (e.g., ArthurBook)
+            action_classes = {}
+            for action_name, param_spec in item.interactions.items():
+                # Third layer: Action-specific class (e.g., Reading, Writing)
+                fields = {"action_name": Literal[action_name]}
+                
+                # Create class attributes dictionary
+                class_attrs = {
+                    "__annotations__": fields,
+                    "action_name": Field(default=..., description=f"Action: {action_name}")
+                }
+                
+                # Only add parameter field if parameters are required
+                if param_spec is not None:
+                    fields["parameter"] = str  # Add to annotations
+                    class_attrs["parameter"] = Field(default=..., description="Parameter for the action")
+                
+                action_class = type(
+                    action_name.capitalize(),  # e.g., "Read", "Write"
+                    (BaseModel,),
+                    class_attrs
+                )
+                action_classes[action_name] = action_class
 
-        # 動態創建主要的 action schemas
+            # Second layer: Define the item class
+            item_class_name = item.name.replace("_", "").capitalize()  # e.g., "Arthurbook"
+            item_classes[item.name] = type(
+                item_class_name,
+                (BaseModel,),
+                {
+                    "__annotations__": {
+                        "item_name": Literal[item.name],
+                        "action": Union[tuple(action_classes.values())]
+                    },
+                    "item_name": Field(default=..., description=f"Item: {item.name}")
+                }
+            )
+
+        # First layer: InteractItemAction
+        class InteractItemAction(BaseModel):
+            action_type: Literal["interact_item"]
+            interact_with: Union[tuple(item_classes.values())] if item_classes else Any
+
+        # Static actions
         class EnterSpaceAction(BaseModel):
             action_type: Literal["enter_space"]
             target_space: Literal[*valid_spaces] if valid_spaces else str
@@ -233,16 +402,7 @@ class NPC(BaseModel):
             target_npc: Literal[*valid_npcs] if valid_npcs else str
             dialogue: str
 
-        # class InteractItemAction(BaseModel):
-        #     action_type: Literal["interact_item"]
-        #     target_item: Literal[*[item.name for item in available_items]] if available_items else str
-        #     interaction: Union[*item_interaction_schemas.values()] if item_interaction_schemas else Dict
-
-        class InteractItemAction(BaseModel):
-            action_type: Literal["interact_item"]
-            # target_item: str
-            target_item: Dict[str, Dict[str, Optional[Dict[str, type]]]]
-        # Create new GeneralResponse
+        # Top-level response
         class GeneralResponse(BaseModel):
             self_talk_reasoning: str
             action: Optional[Union[
@@ -250,42 +410,8 @@ class NPC(BaseModel):
                 InteractItemAction,
                 TalkToNPCAction
             ]] = None
-
+        
         return GeneralResponse
-
-
-    # def update_schema(self):
-    #     """
-    #     Dynamically update the schemas based on the NPC's current state.
-    #     """
-    #
-    #     print("---")
-    #     # Check and update EnterSpaceAction
-    #     valid_spaces = [space.name for space in self.current_space.connected_spaces]
-    #     if valid_spaces:  # Only include if there are connected spaces
-    #         self.EnterSpaceAction.__annotations__["target_space"] = Literal[tuple(valid_spaces)]
-    #         self.EnterSpaceAction.model_rebuild()
-    #
-    #     # Check and update InteractItemAction
-    #     available_items = self.current_space.items + self.inventory.items
-    #     if available_items:  # Only include if there are items to interact with
-    #         valid_items = {
-    #             item.name: item.interactions
-    #             for item in available_items
-    #         }
-    #         print(f"valid items: {valid_items}")
-    #         self.InteractItemAction.__annotations__["target_item"] = type(valid_items)
-    #         self.InteractItemAction.model_rebuild()
-    #
-    #     # Check and update TalkToNPCAction
-    #     valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
-    #     if valid_npcs:  # Only include if there are other NPCs present
-    #         self.TalkToNPCAction.__annotations__["target_npc"] = Literal[tuple(valid_npcs)]
-    #         self.TalkToNPCAction.model_rebuild()
-    #     print(f"valid spaces: {valid_spaces}")
-    #     print(f"valid npcs: {valid_npcs}")
-    #     print(f"available items: {available_items}")
-    #     print("---")
 
 
     def add_space_to_history(self):
@@ -360,76 +486,18 @@ class NPC(BaseModel):
         return f"Cannot move to {target_space_name}. It is not connected to {self.current_space.name}."
 
     def process_tick(self, user_input: Optional[str] = None):
-        # Get valid options from current state
-        valid_spaces = [space.name for space in self.current_space.connected_spaces]
-        valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
-        available_items = self.current_space.items + self.inventory.items
-
-        # --- Dynamic Item Interaction Schemas ---
-        item_classes = {}
-        for item in available_items:
-            # Second layer: Item-specific class (e.g., ArthurBook)
-            action_classes = {}
-            for action_name, param_spec in item.interactions.items():
-                # Third layer: Action-specific class (e.g., Reading, Writing)
-                fields = {"action_name": Literal[action_name]}
-                
-                # Create class attributes dictionary
-                class_attrs = {
-                    "__annotations__": fields,
-                    "action_name": Field(default=..., description=f"Action: {action_name}")
-                }
-                
-                # Only add parameter field if parameters are required
-                if param_spec is not None:
-                    fields["parameter"] = str  # Add to annotations
-                    class_attrs["parameter"] = Field(default=..., description="Parameter for the action")
-                
-                action_class = type(
-                    action_name.capitalize(),  # e.g., "Read", "Write"
-                    (BaseModel,),
-                    class_attrs
-                )
-                action_classes[action_name] = action_class
-
-            # Second layer: Define the item class
-            item_class_name = item.name.replace("_", "").capitalize()  # e.g., "Arthurbook"
-            item_classes[item.name] = type(
-                item_class_name,
-                (BaseModel,),
-                {
-                    "__annotations__": {
-                        "item_name": Literal[item.name],
-                        "action": Union[tuple(action_classes.values())]
-                    },
-                    "item_name": Field(default=..., description=f"Item: {item.name}")
-                }
-            )
-
-        # First layer: InteractItemAction
-        class InteractItemAction(BaseModel):
-            action_type: Literal["interact_item"]
-            interact_with: Union[tuple(item_classes.values())]
-
-        # Static actions
-        class EnterSpaceAction(BaseModel):
-            action_type: Literal["enter_space"]
-            target_space: Literal[*valid_spaces] if valid_spaces else str
-
-        class TalkToNPCAction(BaseModel):
-            action_type: Literal["talk_to_npc"]
-            target_npc: Literal[*valid_npcs] if valid_npcs else str
-            dialogue: str
-
-        # Top-level response
-        class GeneralResponse(BaseModel):
-            self_talk_reasoning: str
-            action: Optional[Union[
-                EnterSpaceAction,
-                InteractItemAction,
-                TalkToNPCAction
-            ]] = None
-
+        """
+        Process a single tick of the NPC's behavior.
+        
+        Args:
+            user_input: Optional input from the user
+            
+        Returns:
+            A string describing the result of the NPC's action
+        """
+        # Get the dynamically generated schema
+        GeneralResponse = self.update_schema()
+        
         # History and AI call
         if self.first_tick:
             self.add_space_to_history()
@@ -443,40 +511,92 @@ class NPC(BaseModel):
             response_format=GeneralResponse
         )
         response = completion.choices[0].message.parsed
+
+        # Add AI's self-reasoning and action to history
+        reasoning_content = f"Thinking: {response.self_talk_reasoning}"
+        self.history.append({"role": "assistant", "content": reasoning_content})
+        
+        # Add the attempted action to history if one exists
+        if response.action:
+            if hasattr(response.action, "action_type") and response.action.action_type == "interact_item":
+                interact_with = response.action.interact_with
+                action_content = f"Action: I'm interacting with {interact_with.item_name} using '{interact_with.action.action_name}'"
+                if hasattr(interact_with.action, "parameter"):
+                    action_content += f" with parameter: {interact_with.action.parameter}"
+            elif hasattr(response.action, "action_type") and response.action.action_type == "enter_space":
+                action_content = f"Action: I'm moving to {response.action.target_space}"
+            elif hasattr(response.action, "action_type") and response.action.action_type == "talk_to_npc":
+                action_content = f"Action: I'm talking to {response.action.target_npc} saying: {response.action.dialogue}"
+            else:
+                action_content = "Action: Attempting an unknown action type"
+                
+            self.history.append({"role": "assistant", "content": action_content})
         
         print("\n=== AI Response ===")
         print(response)
         print("==================\n")
 
-
         # Handle the action
         if not response.action:
             print("No action taken")
-            return "nothing happen"
+            return "Nothing happened."
 
         action = response.action
         result = ""
-        if isinstance(action, InteractItemAction):
-            interact_with = action.interact_with
-            action_data = {
-                interact_with.item_name: {
-                    interact_with.action.action_name: (
-                        {"content": interact_with.action.parameter}
-                        if hasattr(interact_with.action, "parameter") else None
-                    )
+        
+        # Process the action based on its type
+        if hasattr(action, "action_type"):
+            if action.action_type == "interact_item":
+                interact_with = action.interact_with
+                action_data = {
+                    interact_with.item_name: {
+                        interact_with.action.action_name: (
+                            {"content": interact_with.action.parameter}
+                            if hasattr(interact_with.action, "parameter") else None
+                        )
+                    }
                 }
-            }
-            result = self.interact_with_item(action_data)
-        elif isinstance(action, EnterSpaceAction):
-            result = self.move_to_space(action.target_space)
-        elif isinstance(action, TalkToNPCAction):
-            result = self.talk_to_npc(action.target_npc, action.dialogue)
+                result = self.interact_with_item(action_data)
+            elif action.action_type == "enter_space":
+                result = self.move_to_space(action.target_space)
+            elif action.action_type == "talk_to_npc":
+                result = self.talk_to_npc(action.target_npc, action.dialogue)
+            else:
+                result = f"Unknown action type: {action.action_type}"
+        else:
+            result = "Action has no type specified."
 
         self.history.append({"role": "system", "content": result})
         print("\n=== Action Result ===")
         print(result)
         print("===================\n")
         return result
+
+    def talk_to_npc(self, target_npc_name: str, dialogue: str) -> str:
+        """
+        Handle talking to another NPC in the same space.
+        
+        Args:
+            target_npc_name: The name of the NPC to talk to
+            dialogue: What to say to the NPC
+            
+        Returns:
+            A string describing the result of the conversation
+        """
+        # Find the target NPC in the current space
+        target_npc = None
+        for npc in self.current_space.npcs:
+            if npc.name.lower() == target_npc_name.lower() and npc != self:
+                target_npc = npc
+                break
+        
+        if target_npc is None:
+            return f"Cannot find NPC '{target_npc_name}' in the current space."
+        
+        # In a more complex implementation, you might want to pass the dialogue to the target NPC
+        # and get a response back. For now, we'll just return a simple message.
+        return f"{self.name} says to {target_npc.name}: \"{dialogue}\""
+
 
     def interact_with_item(self, action_data: Dict[str, Dict[str, Optional[Dict[str, Any]]]]) -> str:
         """
@@ -548,6 +668,54 @@ personal_diary = Item(
     }
 )
 
+# Kitchen Items
+cooking_pot = Item(
+    name="cooking_pot",
+    description="A large copper pot with a sturdy handle, perfect for cooking hearty meals.",
+    interactions={
+        "cook": {"ingredient": str},
+        "examine": None,
+        "clean": None
+    },
+    properties={
+        "contents": "",
+        "is_clean": True
+    }
+)
+
+# Garden Items
+watering_can = Item(
+    name="watering_can",
+    description="A painted metal watering can with a long spout, ideal for tending to plants.",
+    interactions={
+        "fill": None,
+        "water": {"plant": str},
+        "inspect": None
+    },
+    properties={
+        "water_level": 0,
+        "max_capacity": 10
+    }
+)
+
+# Basement Items
+mysterious_device = Item(
+    name="mysterious_device",
+    description="A strange mechanical contraption with gears, buttons, and blinking lights of unknown purpose.",
+    interactions={
+        "activate": None,
+        "adjust": {"setting": str},
+        "disassemble": None,
+        "inspect": None
+    },
+    properties={
+        "is_active": False,
+        "current_setting": "standby",
+        "energy_level": 75
+    }
+)
+
+
 ancient_book = Item(
     name="ancient_book",
     description="A weathered tome bound in mysterious symbols, its pages filled with fascinating stories.",
@@ -605,6 +773,125 @@ living_room = Space(
     ),
     items=[music_box, mirror]
 )
+
+# Kitchen Items
+cookbook = Item(
+    name="cookbook",
+    description="A well-used cookbook with handwritten notes in the margins and dog-eared pages marking favorite recipes.",
+    interactions={
+        "read": None,
+        "inspect": None
+    },
+    properties={}
+)
+
+tea_set = Item(
+    name="tea_set",
+    description="A delicate porcelain tea set with floral patterns, perfect for brewing and serving tea.",
+    interactions={
+        "use": None,
+        "inspect": None
+    },
+    properties={
+        "is_brewing": False
+    }
+)
+
+# Garden Items
+watering_can = Item(
+    name="watering_can",
+    description="A copper watering can with a long spout, ideal for tending to the garden plants.",
+    interactions={
+        "use": None,
+        "inspect": None
+    },
+    properties={
+        "is_filled": True
+    }
+)
+
+stone_bench = Item(
+    name="stone_bench",
+    description="A weathered stone bench nestled among flowering plants, offering a peaceful spot for contemplation.",
+    interactions={
+        "sit": None,
+        "inspect": None
+    },
+    properties={}
+)
+
+# Attic Items
+old_chest = Item(
+    name="old_chest",
+    description="A dusty wooden chest with iron fittings, locked and seemingly untouched for years.",
+    interactions={
+        "open": None,
+        "inspect": None
+    },
+    properties={
+        "is_locked": True
+    }
+)
+
+telescope = Item(
+    name="telescope",
+    description="An antique brass telescope mounted by the window, pointing toward the night sky.",
+    interactions={
+        "use": None,
+        "adjust": None,
+        "inspect": None
+    },
+    properties={
+        "is_focused": False
+    }
+)
+
+# Initialize the new spaces
+kitchen = Space(
+    name="kitchen",
+    description=(
+        "A warm, inviting kitchen with copper pots hanging from the ceiling and sunlight "
+        "streaming through a window above the sink. A cookbook rests on the counter next "
+        "to a beautiful tea set, ready for use."
+    ),
+    items=[cookbook, tea_set]
+)
+
+garden = Space(
+    name="garden",
+    description=(
+        "A lush garden bursting with colorful flowers and aromatic herbs. Stone pathways "
+        "wind through the greenery, leading to a peaceful stone bench. A copper watering "
+        "can sits ready for tending to the plants."
+    ),
+    items=[watering_can, stone_bench]
+)
+
+attic = Space(
+    name="attic",
+    description=(
+        "A spacious attic filled with dust motes dancing in beams of light from a small "
+        "round window. An old wooden chest sits in one corner, while a brass telescope "
+        "stands by the window, pointed at the sky."
+    ),
+    items=[old_chest, telescope]
+)
+basement = Space(
+    name="basement",
+    description=(
+        "A dimly lit basement with stone walls and a slightly damp atmosphere. Shelves line "
+        "the walls, filled with old bottles and curious artifacts. In the center stands a "
+        "mysterious device with blinking lights and intricate gears."
+    ),
+    items=[mysterious_device]
+)
+
+# Connect all spaces in a logical layout
+living_room.biconnect(kitchen)
+living_room.biconnect(garden)
+study_room.biconnect(attic)
+living_room.biconnect(basement)
+
 
 # Connect the spaces
 study_room.biconnect(living_room)
