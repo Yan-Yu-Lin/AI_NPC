@@ -1,6 +1,6 @@
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from typing import Union, Literal, List, Optional, Dict, Any
+from typing import Union, Literal, List, Optional, Dict, Any, Annotated
 
 
 client = OpenAI()
@@ -197,7 +197,7 @@ class NPC(BaseModel):
         ]] = None
 
 
-    def update_schema(self):
+    def update_schema(self): # This is currently abandoned, ignore this part
         """
         Dynamically update schemas based on NPC's current state
         """
@@ -419,33 +419,80 @@ class NPC(BaseModel):
         valid_spaces = [space.name for space in self.current_space.connected_spaces]
         valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
         available_items = self.current_space.items + self.inventory.items
-        item_interaction_classes = {}
-        for item in available_items:
-            interactions = item.interactions
 
-            # 動態生成該物品的互動類別
-            class_name = f"{item.name}Interactions"
-            
-            # 這裡可能需要調整
-            ItemInteractions = type(
-                class_name,
-                (BaseModel,),
+
+        # Assume BaseItemInteraction is a simple base class (adjust if yours differs)
+        class BaseItemInteraction(BaseModel):
+            item_name: str
+            action: Dict[str, Optional[Dict[str, Any]]]
+
+        # Dictionary to store item-specific interaction classes
+        item_interaction_classes = {}
+
+        # Dynamically create a schema for each item
+        for item in available_items:
+            # Define the class dynamically using type()
+            NewInteraction = type(
+                f"{item.name.capitalize()}Interaction",
+                (BaseItemInteraction,),
                 {
                     "__annotations__": {
-                        "item_name": Literal[item.name],  # 加入物品名稱限制
-                        "action": Dict[str, Optional[Dict[str, type]]]
-                    },
-                    "item_name": item.name,
-                    "action": interactions
+                        "item_name": Literal[item.name],  # e.g., Literal["music_box"]
+                        # action is a dict with keys from item.interactions, values are None or dict
+                        "action": Dict[str, Optional[Dict[str, Any]]] # AI PAY Attention here: It seems this line is the probelm. It's way too complicated for pydantic to handle
+                    }
                 }
             )
-            item_interaction_classes[item.name] = ItemInteractions
+            item_interaction_classes[item.name] = NewInteraction
 
-        # 然後在 InteractItemAction 中使用
+        # Define InteractItemAction by combining all item interaction classes
         class InteractItemAction(BaseModel):
             action_type: Literal["interact_item"]
-            interaction: Union[*item_interaction_classes.values()]
+            target_interaction: Union[tuple(item_interaction_classes.values())]
+
+        # Rebuild the model to resolve forward references
         InteractItemAction.model_rebuild()
+
+
+    # 先建立一個物品互動模型的共用基底
+    #     class BaseItemInteraction(BaseModel):
+    #         item_name: str
+    #         action: Dict[str, Optional[Dict[str, type]]]
+    #
+    #         model_config = {'discriminator': 'item_name'}
+    #
+    #     # 針對目前可用的物品動態產生各自的互動模型
+    #     item_interaction_classes = {}
+    #     for item in available_items:
+    #         class_name = f"{item.name.capitalize()}Interaction"
+    #         # 動態建立每個物品的互動模型，使用 Literal 限定 item_name，action 直接取自該物品的 interactions
+    #         NewInteraction = type(
+    #             class_name,
+    #             (BaseItemInteraction,),
+    #             {
+    #                 '__annotations__': {
+    #                     'item_name': Literal[item.name],
+    #                     'action': Dict[str, Optional[Dict[str, type]]],
+    #                 },
+    #                 'item_name': item.name,
+    #                 'action': item.interactions,
+    #             }
+    #         )
+    #         item_interaction_classes[item.name] = NewInteraction
+    #
+    #     # 定義 InteractItemAction，利用 Annotated + Field 指定 discriminator 讓 Union 能正確生成 schema
+    #     from pydantic import Field
+    #     from typing_extensions import Annotated
+    #
+    #     class InteractItemAction(BaseModel):
+    #         action_type: Literal["interact_item"]
+    #         target_interaction: Annotated[
+    #             Union[*item_interaction_classes.values()],
+    #             Field(discriminator="item_name")
+    #         ]
+    #
+    #     InteractItemAction.model_rebuild()
+
                 # Debug prints
         print("\nValid spaces:", valid_spaces)
         print("Valid NPCs:", valid_npcs)
@@ -460,19 +507,13 @@ class NPC(BaseModel):
             target_npc: Literal[*valid_npcs] if valid_npcs else str
             dialogue: str
 
-        # class InteractItemAction(BaseModel):
-        #     action_type: Literal["interact_item"]
-        #     target_item: str
+     
         
 
         print("Available items:", available_items)
         print("Item interaction classes:", item_interaction_classes)
         print("Item interaction values:", list(item_interaction_classes.values()))
 
-        # class InteractItemAction(BaseModel):
-        #     action_type: Literal["interact_item"]
-        #     target_item: Literal[*[item.name for item in available_items]] if available_items else str
-        #     interaction: Union[*item_interaction_classes.values()] if item_interaction_classes else Dict[str, Any]
 
         class GeneralResponse(BaseModel):
             self_talk_reasoning: str
@@ -519,7 +560,8 @@ class NPC(BaseModel):
         result = ""
 
         if isinstance(action, InteractItemAction):
-            result = self.interact_with_item(action.target_item)
+            # result = self.interact_with_item(action.target_item)
+            result = self.interact_with_item(action.target_interaction)
         elif isinstance(action, EnterSpaceAction):
             result = self.move_to_space(action.target_space)
         elif isinstance(action, TalkToNPCAction):
