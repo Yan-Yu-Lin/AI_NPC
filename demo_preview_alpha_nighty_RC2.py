@@ -949,9 +949,92 @@ while True:
         break
 
     elif user_input == "p":
-        print("History:")
-        for message in arthur.history:
-            print(f"{message['role']}: {message['content']}")
+        try:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
+            
+            console = Console()
+            print("History:")
+            
+            # Group messages by consecutive role
+            grouped_messages = []
+            current_group = None
+            
+            for message in arthur.history:
+                role = message['role']
+                content = message['content']
+                
+                if current_group is None or current_group['role'] != role:
+                    # Start a new group
+                    current_group = {'role': role, 'contents': [content]}
+                    grouped_messages.append(current_group)
+                else:
+                    # Add to existing group
+                    current_group['contents'].append(content)
+            
+            # Display each group
+            for group in grouped_messages:
+                role = group['role']
+                contents = group['contents']
+                
+                # Set style based on role
+                if role == "system":
+                    style = "blue"
+                    title = "SYSTEM"
+                elif role == "assistant":
+                    style = "green"
+                    title = "ARTHUR"
+                elif role == "user":
+                    style = "yellow"
+                    title = "USER"
+                else:
+                    style = "white"
+                    title = role.upper()
+                
+                # Join all contents with line breaks
+                combined_content = "\n".join(contents)
+                
+                # Create a panel with the role name at the top, followed by content on new lines
+                panel_text = f"{title}:\n{combined_content}"
+                panel = Panel(panel_text, border_style=style)
+                
+                # Print the panel
+                console.print(panel)
+                
+        except ImportError:
+            # Fallback if rich is not installed
+            print("For better formatting, install the 'rich' library with: pip install rich")
+            print("History:")
+            
+            current_role = None
+            role_messages = []
+            
+            for message in arthur.history:
+                role = message['role']
+                content = message['content']
+                
+                if current_role is None or current_role != role:
+                    # Print previous role's messages if any
+                    if role_messages:
+                        print(f"{current_role.upper()}:")
+                        for msg in role_messages:
+                            print(f"  {msg}")
+                        print()
+                    
+                    # Start new role
+                    current_role = role
+                    role_messages = [content]
+                else:
+                    # Add to current role
+                    role_messages.append(content)
+            
+            # Print the last group
+            if role_messages:
+                print(f"{current_role.upper()}:")
+                for msg in role_messages:
+                    print(f"  {msg}")
+                print()
 
     elif user_input == "s":
         arthur.print_current_schema()
