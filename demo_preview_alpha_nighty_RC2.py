@@ -854,6 +854,118 @@ def select_world():
     print(f"Loading world: {selected_world}")
     return os.path.join("worlds", selected_world)
 
+def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
+    """
+    Save the current world state to a JSON file.
+    
+    Args:
+        world: Dictionary containing the world objects
+        file_path: Path where to save the JSON file
+        
+    Returns:
+        True if save was successful, False otherwise
+    """
+    try:
+        # Create a dictionary to hold the serialized world data
+        world_data = {
+            "world_name": world.get("world_name", "Unknown World"),
+            "description": world.get("description", ""),
+            "spaces": [],
+            "items": [],
+            "npcs": []
+        }
+        
+        # Serialize spaces
+        for space_name, space in world["spaces"].items():
+            space_data = {
+                "name": space.name,
+                "description": space.description,
+                "connected_spaces": [connected.name for connected in space.connected_spaces],
+                "items": [item.name for item in space.items]
+                # NPCs are handled separately
+            }
+            world_data["spaces"].append(space_data)
+        
+        # Serialize items
+        for item_name, item in world["items"].items():
+            # Convert interactions back to string type format
+            interactions = {}
+            for interaction_name, param_spec in item.interactions.items():
+                if param_spec is None:
+                    interactions[interaction_name] = None
+                else:
+                    # Convert parameter types from actual types to strings
+                    param_dict = {}
+                    for param_name, param_type in param_spec.items():
+                        # Map Python types back to strings
+                        type_str = "str"
+                        if param_type == int:
+                            type_str = "int"
+                        elif param_type == bool:
+                            type_str = "bool"
+                        elif param_type == float:
+                            type_str = "float"
+                        param_dict[param_name] = type_str
+                    interactions[interaction_name] = param_dict
+            
+            item_data = {
+                "name": item.name,
+                "description": item.description,
+                "interactions": interactions,
+                "properties": item.properties
+            }
+            world_data["items"].append(item_data)
+        
+        # Serialize NPCs
+        for npc_name, npc in world["npcs"].items():
+            npc_data = {
+                "name": npc.name,
+                "description": npc.description,
+                "starting_space": npc.current_space.name,
+                "inventory": [item.name for item in npc.inventory.items],
+                "history": npc.history  # Save the NPC's memory/history
+            }
+            world_data["npcs"].append(npc_data)
+        
+        # Write to file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(world_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"World successfully saved to {file_path}")
+        return True
+    
+    except Exception as e:
+        print(f"Error saving world: {str(e)}")
+        return False
+
+def prompt_for_save_location(original_file_path: str) -> str:
+    """
+    Prompt the user for where to save the world.
+    
+    Args:
+        original_file_path: The path of the originally loaded world file
+        
+    Returns:
+        Path where to save the world
+    """
+    print("\n=== Save World ===")
+    print("Enter a new filename to save as a new world, or")
+    print("Press Enter to overwrite the current world file.")
+    print(f"Current file: {os.path.basename(original_file_path)}")
+    
+    user_input = input("Save as (leave blank to overwrite): ").strip()
+    
+    if not user_input:
+        # Overwrite the original file
+        return original_file_path
+    
+    # Check if the user provided a .json extension
+    if not user_input.lower().endswith('.json'):
+        user_input += '.json'
+    
+    # Return the new file path
+    return os.path.join("worlds", user_input)
+
 #NOTE: Main Loop
 def SandBox():
     """
@@ -881,6 +993,9 @@ def SandBox():
             user_input = input("e -> exit, i -> info: ").strip().lower()
             
             if user_input == "e":
+                # Prompt for saving before exit
+                save_path = prompt_for_save_location(world_file_path)
+                save_world_to_json(world, save_path)
                 print("Exiting...")
                 break
             elif user_input == "i":
@@ -928,6 +1043,9 @@ def SandBox():
                 print()
 
             elif user_input == "e":
+                # Prompt for saving before exit
+                save_path = prompt_for_save_location(world_file_path)
+                save_world_to_json(world, save_path)
                 print("Exiting...")
                 break
 
