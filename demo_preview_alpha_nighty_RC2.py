@@ -854,129 +854,194 @@ def select_world():
     print(f"Loading world: {selected_world}")
     return os.path.join("worlds", selected_world)
 
-# Replace the hardcoded world loading with the selection function
-# world_file_path = os.path.join("worlds", "world_test.json")
-world_file_path = select_world()
-world_data = load_world_from_json(world_file_path)
-world = build_world_from_data(world_data)
-
-# Get the main NPC (arthur) for the game loop
-arthur = world["npcs"].get("arthur")
-if not arthur:
-    print("Error: Main NPC 'arthur' not found in the world data")
-    exit(1)
-
-
-
-
-# 主迴圈
-while True:
-    print("=====================")
-    user_input = input("c -> continue, e -> exit, p -> print history, s -> show schema: ").strip().lower()
-
-    if user_input == "c":
-        result = arthur.process_tick()
-        print(f"Tick Result: {result}")
-        print()
-        print()
-
-    elif user_input == "e":
-        print("Exiting...")
-        break
-
-    elif user_input == "p":
-        try:
-            from rich.console import Console
-            from rich.panel import Panel
-            from rich.text import Text
+#NOTE: Main Loop
+def SandBox():
+    """
+    Main sandbox function that handles world selection, loading, and the game loop.
+    This function allows users to interact with NPCs in the selected world.
+    """
+    # Select and load a world
+    world_file_path = select_world()
+    world_data = load_world_from_json(world_file_path)
+    world = build_world_from_data(world_data)
+    
+    # Get all NPCs from the world
+    npcs = list(world["npcs"].values())
+    
+    if not npcs:
+        print("Warning: No NPCs found in this world. The simulation will be limited.")
+        print(f"World loaded: {world['world_name']}")
+        print(f"Description: {world['description']}")
+        print(f"Spaces: {', '.join(world['spaces'].keys())}")
+        print(f"Items: {', '.join(world['items'].keys())}")
+        
+        # Simple loop for worlds without NPCs
+        while True:
+            print("=====================")
+            user_input = input("e -> exit, i -> info: ").strip().lower()
             
-            console = Console()
-            print("History:")
+            if user_input == "e":
+                print("Exiting...")
+                break
+            elif user_input == "i":
+                print(f"World: {world['world_name']}")
+                print(f"Description: {world['description']}")
+                print(f"Spaces: {', '.join(world['spaces'].keys())}")
+                print(f"Items: {', '.join(world['items'].keys())}")
+            else:
+                print("No NPCs to interact with. Try a different world or add NPCs to this one.")
+    else:
+        # Print world info
+        print(f"World loaded: {world['world_name']}")
+        print(f"Description: {world['description']}")
+        print(f"NPCs: {', '.join([npc.name for npc in npcs])}")
+        
+        # Select which NPC to focus on for detailed interactions
+        active_npc_index = 0
+        if len(npcs) > 1:
+            print("\n=== Available NPCs ===")
+            for i, npc in enumerate(npcs, 1):
+                print(f"{i}. {npc.name} - {npc.description}")
             
-            # Group messages by consecutive role
-            grouped_messages = []
-            current_group = None
-            
-            for message in arthur.history:
-                role = message['role']
-                content = message['content']
-                
-                if current_group is None or current_group['role'] != role:
-                    # Start a new group
-                    current_group = {'role': role, 'contents': [content]}
-                    grouped_messages.append(current_group)
-                else:
-                    # Add to existing group
-                    current_group['contents'].append(content)
-            
-            # Display each group
-            for group in grouped_messages:
-                role = group['role']
-                contents = group['contents']
-                
-                # Set style based on role
-                if role == "system":
-                    style = "blue"
-                    title = "SYSTEM"
-                elif role == "assistant":
-                    style = "green"
-                    title = "ARTHUR"
-                elif role == "user":
-                    style = "yellow"
-                    title = "USER"
-                else:
-                    style = "white"
-                    title = role.upper()
-                
-                # Join all contents with line breaks
-                combined_content = "\n".join(contents)
-                
-                # Create a panel with the role name at the top, followed by content on new lines
-                panel_text = f"{title}:\n{combined_content}"
-                panel = Panel(panel_text, border_style=style)
-                
-                # Print the panel
-                console.print(panel)
-                
-        except ImportError:
-            # Fallback if rich is not installed
-            print("For better formatting, install the 'rich' library with: pip install rich")
-            print("History:")
-            
-            current_role = None
-            role_messages = []
-            
-            for message in arthur.history:
-                role = message['role']
-                content = message['content']
-                
-                if current_role is None or current_role != role:
-                    # Print previous role's messages if any
+            while True:
+                npc_choice = input("Select an NPC to focus on (number): ").strip()
+                if npc_choice.isdigit() and 1 <= int(npc_choice) <= len(npcs):
+                    active_npc_index = int(npc_choice) - 1
+                    break
+                print(f"Please enter a number between 1 and {len(npcs)}")
+        
+        active_npc = npcs[active_npc_index]
+        print(f"Focusing on NPC: {active_npc.name}")
+        
+        # Main game loop
+        while True:
+            print("=====================")
+            user_input = input("c -> continue, e -> exit, p -> print history, s -> show schema, n -> switch NPC: ").strip().lower()
+
+            if user_input == "c":
+                # Process a tick for all NPCs, but only show result for active NPC
+                for npc in npcs:
+                    result = npc.process_tick()
+                    if npc == active_npc:
+                        print(f"[{npc.name}] Tick Result: {result}")
+                print()
+                print()
+
+            elif user_input == "e":
+                print("Exiting...")
+                break
+
+            elif user_input == "p":
+                try:
+                    from rich.console import Console
+                    from rich.panel import Panel
+                    
+                    console = Console()
+                    print(f"History for {active_npc.name}:")
+                    
+                    # Group messages by consecutive role
+                    grouped_messages = []
+                    current_group = None
+                    
+                    for message in active_npc.history:
+                        role = message['role']
+                        content = message['content']
+                        
+                        if current_group is None or current_group['role'] != role:
+                            # Start a new group
+                            current_group = {'role': role, 'contents': [content]}
+                            grouped_messages.append(current_group)
+                        else:
+                            # Add to existing group
+                            current_group['contents'].append(content)
+                    
+                    # Display each group
+                    for group in grouped_messages:
+                        role = group['role']
+                        contents = group['contents']
+                        
+                        # Set style based on role
+                        if role == "system":
+                            style = "blue"
+                            title = "SYSTEM"
+                        elif role == "assistant":
+                            style = "green"
+                            title = active_npc.name.upper()
+                        elif role == "user":
+                            style = "yellow"
+                            title = "USER"
+                        else:
+                            style = "white"
+                            title = role.upper()
+                        
+                        # Join all contents with line breaks
+                        combined_content = "\n".join(contents)
+                        
+                        # Create a panel with the role name at the top, followed by content on new lines
+                        panel_text = f"{title}:\n{combined_content}"
+                        panel = Panel(panel_text, border_style=style)
+                        
+                        # Print the panel
+                        console.print(panel)
+                        
+                except ImportError:
+                    # Fallback if rich is not installed
+                    print("For better formatting, install the 'rich' library with: pip install rich")
+                    print(f"History for {active_npc.name}:")
+                    
+                    current_role = None
+                    role_messages = []
+                    
+                    for message in active_npc.history:
+                        role = message['role']
+                        content = message['content']
+                        
+                        if current_role is None or current_role != role:
+                            # Print previous role's messages if any
+                            if role_messages:
+                                print(f"{current_role.upper()}:")
+                                for msg in role_messages:
+                                    print(f"  {msg}")
+                                print()
+                            
+                            # Start new role
+                            current_role = role
+                            role_messages = [content]
+                        else:
+                            # Add to current role
+                            role_messages.append(content)
+                    
+                    # Print the last group
                     if role_messages:
                         print(f"{current_role.upper()}:")
                         for msg in role_messages:
                             print(f"  {msg}")
                         print()
-                    
-                    # Start new role
-                    current_role = role
-                    role_messages = [content]
-                else:
-                    # Add to current role
-                    role_messages.append(content)
-            
-            # Print the last group
-            if role_messages:
-                print(f"{current_role.upper()}:")
-                for msg in role_messages:
-                    print(f"  {msg}")
+
+            elif user_input == "s":
+                active_npc.print_current_schema()
+                
+            elif user_input == "n" and len(npcs) > 1:
+                print("\n=== Available NPCs ===")
+                for i, npc in enumerate(npcs, 1):
+                    print(f"{i}. {npc.name} - {npc.description}")
+                
+                while True:
+                    npc_choice = input("Select an NPC to focus on (number): ").strip()
+                    if npc_choice.isdigit() and 1 <= int(npc_choice) <= len(npcs):
+                        active_npc_index = int(npc_choice) - 1
+                        active_npc = npcs[active_npc_index]
+                        print(f"Now focusing on: {active_npc.name}")
+                        break
+                    print(f"Please enter a number between 1 and {len(npcs)}")
+
+            else:
+                # Process user input for the active NPC only
+                result = active_npc.process_tick(user_input)
+                print(f"[{active_npc.name}] Tick Result: {result}")
+                print()
                 print()
 
-    elif user_input == "s":
-        arthur.print_current_schema()
-
-    else:
-        result = arthur.process_tick(user_input)
-        print(f"Tick Result: {result}")
-        print()
-        print()
+# Run the sandbox
+if __name__ == "__main__":
+    SandBox()
