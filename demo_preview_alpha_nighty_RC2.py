@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Union, Literal, List, Optional, Dict, Any, Annotated
 import json
 import os
+import glob
 
 client = OpenAI()
 
@@ -220,7 +221,7 @@ class Item(BaseModel):
         return f"You adjust the {self.name}, but nothing seems to change."
 
 
-#TODO: Define Spaces
+#NOTE: Space 空間 class
 
 # 定義 Space 類
 class Space(BaseModel):
@@ -256,7 +257,7 @@ class Space(BaseModel):
 
 
 
-#TODO: Define inventory
+#NOTE: Define Inventory
 # Inventory 類
 class Inventory(BaseModel):
     items: List[Item] = []  # 存放物品的列表
@@ -295,7 +296,7 @@ class Inventory(BaseModel):
             return "Inventory is empty."
         return "\n".join([f"- {item.name}: {item.description}" for item in self.items])
 
-#TODO: Define NPC
+#NOTE: Define NPC
 ## 定義 NPC 類
 
 class NPC(BaseModel):
@@ -785,10 +786,77 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
         "npcs": npcs_dict
     }
 
+# New function to list available worlds
+def list_available_worlds():
+    """
+    Scan the 'worlds' folder and return a list of available world files.
+    
+    Returns:
+        List of world filenames (without path)
+    """
+    # Make sure the worlds directory exists
+    if not os.path.exists("worlds"):
+        print("Creating 'worlds' directory...")
+        os.makedirs("worlds")
+        return []
+    
+    # Get all JSON files in the worlds directory
+    world_files = glob.glob(os.path.join("worlds", "*.json"))
+    
+    # Extract just the filenames without the path
+    return [os.path.basename(file) for file in world_files]
 
+def select_world():
+    """
+    Prompt the user to select a world from the available options.
+    
+    Returns:
+        Path to the selected world file
+    """
+    available_worlds = list_available_worlds()
+    
+    if not available_worlds:
+        print("No world files found in the 'worlds' directory.")
+        print("Please add world JSON files to the 'worlds' directory and restart.")
+        exit(1)
+    
+    print("\n=== Available Worlds ===")
+    for i, world_file in enumerate(available_worlds, 1):
+        print(f"{i}. {world_file}")
+    print("=======================\n")
+    
+    while True:
+        user_input = input("Enter world name or number to load (partial name is OK): ").strip()
+        
+        # Check if input is a number
+        if user_input.isdigit():
+            index = int(user_input) - 1
+            if 0 <= index < len(available_worlds):
+                selected_world = available_worlds[index]
+                break
+            else:
+                print(f"Invalid number. Please enter a number between 1 and {len(available_worlds)}.")
+        else:
+            # Try to match partial name
+            matches = [world for world in available_worlds if user_input.lower() in world.lower()]
+            
+            if len(matches) == 1:
+                selected_world = matches[0]
+                break
+            elif len(matches) > 1:
+                print("Multiple matches found:")
+                for i, match in enumerate(matches, 1):
+                    print(f"{i}. {match}")
+                continue
+            else:
+                print("No matching world found. Please try again.")
+    
+    print(f"Loading world: {selected_world}")
+    return os.path.join("worlds", selected_world)
 
-# Load world from JSON
-world_file_path = os.path.join("worlds", "world_test.json")
+# Replace the hardcoded world loading with the selection function
+# world_file_path = os.path.join("worlds", "world_test.json")
+world_file_path = select_world()
 world_data = load_world_from_json(world_file_path)
 world = build_world_from_data(world_data)
 
@@ -797,288 +865,8 @@ arthur = world["npcs"].get("arthur")
 if not arthur:
     print("Error: Main NPC 'arthur' not found in the world data")
     exit(1)
-#TODO: A general system instruction for AI
 
 
-# #NOTE:
-# # initializing Items
-# # Study Room Items
-# personal_diary = Item(
-#     name="personal_diary",
-#     description="A leather-bound diary with gold-trimmed pages, ready to record thoughts and memories.",
-#     interactions={
-#         "read": None,
-#         "write": {"content": str},
-#         "inspect": None
-#     },
-#     properties={
-#         "content": "Dear Diary, today I began my journey in this mysterious place..."
-#     }
-# )
-#
-# # Kitchen Items
-# cooking_pot = Item(
-#     name="cooking_pot",
-#     description="A large copper pot with a sturdy handle, perfect for cooking hearty meals.",
-#     interactions={
-#         "cook": {"ingredient": str},
-#         "examine": None,
-#         "clean": None
-#     },
-#     properties={
-#         "contents": "",
-#         "is_clean": True
-#     }
-# )
-#
-# # Garden Items
-# watering_can = Item(
-#     name="watering_can",
-#     description="A painted metal watering can with a long spout, ideal for tending to plants.",
-#     interactions={
-#         "fill": None,
-#         "water": {"plant": str},
-#         "inspect": None
-#     },
-#     properties={
-#         "water_level": 0,
-#         "max_capacity": 10
-#     }
-# )
-#
-# # Basement Items
-# mysterious_device = Item(
-#     name="mysterious_device",
-#     description="A strange mechanical contraption with gears, buttons, and blinking lights of unknown purpose.",
-#     interactions={
-#         "activate": None,
-#         "adjust": {"setting": str},
-#         "disassemble": None,
-#         "inspect": None
-#     },
-#     properties={
-#         "is_active": False,
-#         "current_setting": "standby",
-#         "energy_level": 75
-#     }
-# )
-#
-#
-# ancient_book = Item(
-#     name="ancient_book",
-#     description="A weathered tome bound in mysterious symbols, its pages filled with fascinating stories.",
-#     interactions={
-#         "read": None,
-#         "inspect": None
-#     },
-#     properties={
-#         "content": "In the age of wonders, when magic still flowed freely through the world..."
-#     }
-# )
-#
-# # Living Room Items
-# music_box = Item(
-#     name="music_box",
-#     description="An ornate music box decorated with dancing figures, capable of playing enchanting melodies.",
-#     interactions={
-#         "play": None,
-#         "stop": None,
-#         "inspect": None
-#     },
-#     properties={
-#         "is_playing": False
-#     }
-# )
-#
-# mirror = Item(
-#     name="mirror",
-#     description="An elegant full-length mirror in a gilded frame, reflecting the room with perfect clarity.",
-#     interactions={
-#         "inspect": None
-#     },
-#     properties={}
-# )
-#
-#
-# #NOTE:
-# # Initialize Spaces with their items
-# study_room = Space(
-#     name="study_room",
-#     description=(
-#         "A cozy study lined with wooden bookshelves. Warm lamplight creates a perfect "
-#         "atmosphere for reading and writing. A personal diary rests on the desk, and "
-#         "an ancient book catches your eye from one of the shelves."
-#     ),
-#     items=[personal_diary, ancient_book]
-# )
-#
-# living_room = Space(
-#     name="living_room",
-#     description=(
-#         "An elegant living room with plush furnishings. Sunlight streams through tall windows, "
-#         "making the ornate music box gleam. A beautiful mirror stands in the corner, "
-#         "adding depth to the room."
-#     ),
-#     items=[music_box, mirror]
-# )
-#
-# # Kitchen Items
-# cookbook = Item(
-#     name="cookbook",
-#     description="A well-used cookbook with handwritten notes in the margins and dog-eared pages marking favorite recipes.",
-#     interactions={
-#         "read": None,
-#         "inspect": None
-#     },
-#     properties={}
-# )
-#
-# tea_set = Item(
-#     name="tea_set",
-#     description="A delicate porcelain tea set with floral patterns, perfect for brewing and serving tea.",
-#     interactions={
-#         "use": None,
-#         "inspect": None
-#     },
-#     properties={
-#         "is_brewing": False
-#     }
-# )
-#
-# # Garden Items
-# watering_can = Item(
-#     name="watering_can",
-#     description="A copper watering can with a long spout, ideal for tending to the garden plants.",
-#     interactions={
-#         "use": None,
-#         "inspect": None
-#     },
-#     properties={
-#         "is_filled": True
-#     }
-# )
-#
-# stone_bench = Item(
-#     name="stone_bench",
-#     description="A weathered stone bench nestled among flowering plants, offering a peaceful spot for contemplation.",
-#     interactions={
-#         "sit": None,
-#         "inspect": None
-#     },
-#     properties={}
-# )
-#
-# # Attic Items
-# old_chest = Item(
-#     name="old_chest",
-#     description="A dusty wooden chest with iron fittings, locked and seemingly untouched for years.",
-#     interactions={
-#         "open": None,
-#         "inspect": None
-#     },
-#     properties={
-#         "is_locked": True
-#     }
-# )
-#
-# telescope = Item(
-#     name="telescope",
-#     description="An antique brass telescope mounted by the window, pointing toward the night sky.",
-#     interactions={
-#         "use": None,
-#         "adjust": None,
-#         "inspect": None
-#     },
-#     properties={
-#         "is_focused": False
-#     }
-# )
-#
-# # Initialize the new spaces
-# kitchen = Space(
-#     name="kitchen",
-#     description=(
-#         "A warm, inviting kitchen with copper pots hanging from the ceiling and sunlight "
-#         "streaming through a window above the sink. A cookbook rests on the counter next "
-#         "to a beautiful tea set, ready for use."
-#     ),
-#     items=[cookbook, tea_set]
-# )
-#
-# garden = Space(
-#     name="garden",
-#     description=(
-#         "A lush garden bursting with colorful flowers and aromatic herbs. Stone pathways "
-#         "wind through the greenery, leading to a peaceful stone bench. A copper watering "
-#         "can sits ready for tending to the plants."
-#     ),
-#     items=[watering_can, stone_bench]
-# )
-#
-# attic = Space(
-#     name="attic",
-#     description=(
-#         "A spacious attic filled with dust motes dancing in beams of light from a small "
-#         "round window. An old wooden chest sits in one corner, while a brass telescope "
-#         "stands by the window, pointed at the sky."
-#     ),
-#     items=[old_chest, telescope]
-# )
-# basement = Space(
-#     name="basement",
-#     description=(
-#         "A dimly lit basement with stone walls and a slightly damp atmosphere. Shelves line "
-#         "the walls, filled with old bottles and curious artifacts. In the center stands a "
-#         "mysterious device with blinking lights and intricate gears."
-#     ),
-#     items=[mysterious_device]
-# )
-#
-# # Connect all spaces in a logical layout
-# living_room.biconnect(kitchen)
-# living_room.biconnect(garden)
-# study_room.biconnect(attic)
-# living_room.biconnect(basement)
-#
-#
-# # Connect the spaces
-# study_room.biconnect(living_room)
-#
-# #TODO: Instance of an NPC
-# # 創建 NPC
-# # Initializing Arthur
-#
-# arthur = NPC(
-#     name="arthur",
-#     description="A curious and thoughtful explorer with a keen interest in uncovering stories and mysteries.",
-#     current_space=living_room,
-#     inventory=Inventory(items=[]),
-#     history=[
-#         {
-#             "role": "system", 
-#             "content": """You are Arthur, a curious explorer who has found yourself in an intriguing house.
-#             You can:
-#             - Explore different rooms
-#             - Interact with items you find
-#             - Record your thoughts in the diary if you find one
-#             - Enjoy music from the music box
-#             
-#             You have a particular interest in:
-#             - Writing down your observations and feelings
-#             - Understanding the stories behind items you find
-#             - Creating a peaceful atmosphere with music
-#             
-#             Take your time to explore and interact with your surroundings."""
-#         },
-#         {
-#             "role": "assistant", 
-#             "content": "I find myself in this interesting house. I should explore and interact with what I find. I wanna explore other spaces"
-#         }
-#     ]
-# )
-#
-# # Add Arthur to his starting space's NPCs list
-# living_room.npcs.append(arthur)
 
 
 # 主迴圈
