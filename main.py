@@ -1,66 +1,86 @@
-import pygame
-import sys
-import random
-from ai_controller import AIController
-from game_object import(
-    GameObject, AI, InteractiveObject, Container, Door,
-    create_box, create_door, create_basic_object,
-    WHITE, BLACK, RED, BLUE, GREEN, YELLOW, PINK
-)
+"""
+AI NPC 主程式
+整合所有模組並運行遊戲系統
+"""
 
-# 遊戲初始化
-pygame.init()
+import os
+from typing import Optional
 
-WINDOW_WIDTH = 1000
-WINDOW_HEIGHT = 800
-screen = pygame.display.set_mode((WINDOW_WIDTH,WINDOW_HEIGHT))
-pygame.display.set_caption("AI 冒險遊戲")
+# 導入所需模組
+from world.world_loader import load_world
+from npcs.npc import NPC
+from history.history_manager import print_history
 
 def main():
-    clock = pygame.time.Clock()
-
-    objects = [
-        create_box(100, 100, BLUE, "藍色盒子", "一個神秘的藍色盒子，似乎可以存放物品"),
-        create_door(300, 200, GREEN, "綠色門", "一扇神秘的綠色門，不知道通向哪裡"),
-        create_basic_object(500, 400, WHITE, "白色物件", "一個純淨的白色物件，散發著柔和的光芒"),
-        Container(200, 400, 25, 25, (255, 165, 0), "橙色 容器", 3, "一個充滿活力的橙色容器"),
-        InteractiveObject(600, 150, 45, 45, (128, 0, 128), "紫色開關", "一個神秘的紫色開關", ["按下", "旋轉"])
-    ]
-
-    ai = AI(
-        x=WINDOW_WIDTH // 2,
-        y=WINDOW_HEIGHT // 2,
-        name="智能助手",
-        description="一個能夠自主探索和互動的AI"
-    )
-
-    ai_controller = AIController(ai, objects)
-
-    try:
-        while True:
-            clock.tick(60)  # 限制更新頻率
-            
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    ai_controller.cleanup()
-                    pygame.quit()
-                    sys.exit()
-
-            ai_controller.update() # 更新AI控制器
-
-            screen.fill(BLACK)
-            for obj in objects: # 繪製所有物件
-                obj.draw(screen) # 繪製物件
-            ai.draw(screen) # 繪製AI
-
-            pygame.display.flip()  # 更新顯示
-    except KeyboardInterrupt:
-        print("遊戲結束")
-    finally:
-        ai_controller.cleanup() # 清理AI控制器
-        pygame.quit() # 退出遊戲
-        sys.exit() # 退出程式
+    """主程式入口點"""
+    print("歡迎來到 AI NPC 模擬系統！")
+    print("正在載入世界...")
+    
+    # 載入世界 - 使用絕對路徑
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    world_file_path = os.path.join(current_dir, "worlds", "world_test.json")
+    print(f"嘗試載入世界檔案：{world_file_path}")
+    
+    world = load_world(world_file_path)
+    
+    if not world:
+        print("錯誤：無法載入世界。程式終止。")
+        return
+    
+    print(f"成功載入世界：{world['world_name']}")
+    print(f"世界描述：{world['description']}")
+    
+    # 獲取主要NPC (arthur)
+    arthur = world["npcs"].get("arthur")
+    if not arthur:
+        print("錯誤：在世界數據中找不到主要NPC 'arthur'")
+        return
+    
+    print(f"主要NPC：{arthur.name} - {arthur.description}")
+    print("\n遊戲開始！\n")
+    
+    # 確保NPC第一次tick已經執行過，並顯示初始狀態
+    if arthur.first_tick:
+        result = arthur.process_tick()
+        print(f"初始狀態: {result}\n")
+        
+        # 顯示當前環境和情境
+        print(f"{arthur.name} 目前所在空間: {arthur.current_space.name}")
+        print(f"空間描述: {arthur.current_space.description}")
+        if arthur.current_space.items:
+            print("空間中的物品:")
+            for item in arthur.current_space.items:
+                print(f" - {item.name}: {item.description}")
+        if arthur.current_space.npcs:
+            print("空間中的其他NPC:")
+            for npc in arthur.current_space.npcs:
+                if npc.name != arthur.name:
+                    print(f" - {npc.name}: {npc.description}")
+        print("\n使用 'c' 繼續遊戲，'p' 查看歷史記錄，或輸入指令給NPC\n")
+    
+    # 遊戲主循環
+    while True:
+        print("=====================")
+        user_input = input("c -> 繼續, e -> 退出, p -> 顯示歷史記錄: ").strip().lower()
+        
+        if user_input == "c":
+            # 與demo_preview_alpha_nighty_RC2.py相同的實現方式
+            result = arthur.process_tick()
+            print(f"結果: {result}\n")
+        
+        elif user_input == "p":
+            # 顯示歷史記錄
+            print_history(arthur)
+        
+        elif user_input == "e":
+            # 退出遊戲
+            print("感謝使用 AI NPC 模擬系統！")
+            break
+        
+        else:
+            # 將用戶輸入傳遞給NPC
+            result = arthur.process_tick(user_input)
+            print(f"結果: {result}\n")
 
 if __name__ == "__main__":
     main()
-            

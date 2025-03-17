@@ -1,0 +1,147 @@
+{
+    "name": "測試世界",
+    "description": "這是一個用於測試NPC行為的小型世界",
+    "spaces": [
+        {
+            "id": "living_room",
+            "name": "客廳",
+            "description": "一個溫馨的客廳，有舒適的沙發和一個咖啡桌。",
+            "connections": ["kitchen", "bedroom"],
+            "items": ["book", "remote"]
+        },
+        {
+            "id": "kitchen",
+            "name": "廚房",
+            "description": "一個乾淨的廚房，有各種烹飪器具。",
+            "connections": ["living_room"],
+            "items": ["apple", "knife"]
+        },
+        {
+            "id": "bedroom",
+            "name": "臥室",
+            "description": "一個整潔的臥室，有一張大床和一個書桌。",
+            "connections": ["living_room"],
+            "items": ["diary", "pen"]
+        }
+    ],
+    "items": [
+        {
+            "id": "book",
+            "name": "書",
+            "description": "一本有關AI歷史的書籍",
+            "content": "人工智能的發展歷程充滿了起伏...",
+            "interactions": [
+                {
+                    "name": "閱讀",
+                    "params": null
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        },
+        {
+            "id": "remote",
+            "name": "遙控器",
+            "description": "電視的遙控器",
+            "interactions": [
+                {
+                    "name": "使用",
+                    "params": {
+                        "channel": "str"
+                    }
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        },
+        {
+            "id": "apple",
+            "name": "蘋果",
+            "description": "一個紅色的新鮮蘋果",
+            "interactions": [
+                {
+                    "name": "吃",
+                    "params": null
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        },
+        {
+            "id": "knife",
+            "name": "刀",
+            "description": "一把鋒利的廚房刀",
+            "interactions": [
+                {
+                    "name": "使用",
+                    "params": {
+                        "target": "str"
+                    }
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        },
+        {
+            "id": "diary",
+            "name": "日記",
+            "description": "一本私人日記",
+            "content": "今天是個美好的一天...",
+            "interactions": [
+                {
+                    "name": "閱讀",
+                    "params": null
+                },
+                {
+                    "name": "寫入",
+                    "params": {
+                        "content": "str"
+                    }
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        },
+        {
+            "id": "pen",
+            "name": "筆",
+            "description": "一支黑色的圓珠筆",
+            "interactions": [
+                {
+                    "name": "使用",
+                    "params": {
+                        "action": "str"
+                    }
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        }
+    ],
+    "npcs": [
+        {
+            "id": "arthur",
+            "name": "亞瑟",
+            "description": "一個友好的AI助手",
+            "personality": "好奇且樂於助人",
+            "knowledge": {
+                "AI": "我對AI領域有豐富的知識",
+                "書籍": "我喜歡閱讀各種書籍"
+            },
+            "starting_space": "living_room",
+            "inventory": []
+        }
+    ]
+}
