@@ -7,7 +7,8 @@ import glob
 
 client = OpenAI()
 
-
+# 設定全局變量使 NPC 類可以訪問
+world_system = None
 
 #NOTE: Item
 
@@ -19,206 +20,9 @@ class Item(BaseModel):
     # Simpler interaction definition:
     # - If value is None: no parameters needed
     # - If value is dict: specifies required parameters and their types
-    interactions: Dict[str, Optional[Dict[str, type]]]
     properties: Dict[str, Any] = {}
 
-    def interact(self, interaction_type: str, **kwargs) -> str:
-        """Handle interactions with parameter validation"""
-        if interaction_type not in self.interactions:
-            return f"{self.name} cannot be {interaction_type}."
 
-        # Get parameter requirements
-        param_requirements = self.interactions[interaction_type]
-        
-        # If parameters are required, validate them
-        if param_requirements:
-            if not kwargs:
-                return f"{interaction_type} requires parameters: {param_requirements}"
-            
-            # Validate parameters match requirements
-            for param_name, param_type in param_requirements.items():
-                if param_name not in kwargs:
-                    return f"Missing required parameter: {param_name}"
-                if not isinstance(kwargs[param_name], param_type):
-                    return f"Invalid type for {param_name}"
-
-        # Call the appropriate method
-        method = getattr(self, interaction_type, None)
-        if callable(method):
-            return method(**kwargs)
-
-        return f"No behavior defined for {interaction_type} on {self.name}."
-
-    # Interaction methods remain the same
-    def read(self) -> str:
-        content = self.properties.get("content", None)
-        if content:
-            return f"You read the {self.name}: {content}"
-        return f"There is nothing to read in the {self.name}."
-
-    def write(self, content: str) -> str:
-        if "content" not in self.properties:
-            return f"You cannot write in the {self.name}."
-        self.properties["content"] += f"\n{content}"
-        return f"You wrote in the {self.name}: {content}"
-
-    def inspect(self) -> str:
-        return f"You inspect the {self.name}: {self.description}"
-
-    def play(self) -> str:
-        if "is_playing" in self.properties:
-            if self.properties["is_playing"]:
-                return f"The {self.name} is already playing."
-            self.properties["is_playing"] = True
-            return f"You start playing the {self.name}."
-        return f"The {self.name} cannot be played."
-
-    def stop(self) -> str:
-        if "is_playing" in self.properties:
-            if not self.properties["is_playing"]:
-                return f"The {self.name} is not playing."
-            self.properties["is_playing"] = False
-            return f"You stop the {self.name}."
-        return f"The {self.name} cannot be stopped."
-
-    # New interaction methods for cooking_pot
-    def cook(self, ingredient: str) -> str:
-        """Cook something in the pot using the specified ingredient."""
-        if "contents" not in self.properties:
-            return f"The {self.name} cannot be used for cooking."
-        
-        if not self.properties.get("is_clean", False):
-            return f"The {self.name} is dirty and needs to be cleaned before cooking."
-        
-        self.properties["contents"] = ingredient
-        return f"You cook {ingredient} in the {self.name}. It smells delicious!"
-    
-    def examine(self) -> str:
-        """Examine an item closely (similar to inspect but with different wording)."""
-        if "contents" in self.properties and self.properties["contents"]:
-            return f"You examine the {self.name}: {self.description}. It contains {self.properties['contents']}."
-        return f"You examine the {self.name}: {self.description}"
-    
-    def clean(self) -> str:
-        """Clean the item."""
-        if "is_clean" not in self.properties:
-            return f"The {self.name} doesn't need cleaning."
-        
-        self.properties["is_clean"] = True
-        self.properties["contents"] = ""
-        return f"You clean the {self.name} thoroughly. It's now ready for use."
-    
-    # New interaction methods for watering_can
-    def fill(self) -> str:
-        """Fill the watering can with water."""
-        if "water_level" not in self.properties or "max_capacity" not in self.properties:
-            return f"The {self.name} cannot be filled with water."
-        
-        if self.properties["water_level"] >= self.properties["max_capacity"]:
-            return f"The {self.name} is already full."
-        
-        self.properties["water_level"] = self.properties["max_capacity"]
-        return f"You fill the {self.name} with water."
-    
-    def water(self, plant: str) -> str:
-        """Water a plant using the watering can."""
-        if "water_level" not in self.properties:
-            return f"The {self.name} cannot be used for watering."
-        
-        if self.properties["water_level"] <= 0:
-            return f"The {self.name} is empty. You need to fill it first."
-        
-        self.properties["water_level"] -= 1
-        return f"You water the {plant} with the {self.name}. The plant looks refreshed!"
-    
-    # New interaction methods for mysterious_device
-    def activate(self) -> str:
-        """Activate the device."""
-        if "is_active" not in self.properties:
-            return f"The {self.name} cannot be activated."
-        
-        if self.properties["is_active"]:
-            return f"The {self.name} is already active."
-        
-        self.properties["is_active"] = True
-        return f"You activate the {self.name}. It hums to life with a soft glow and mechanical whirring."
-    
-    def adjust(self, setting: str) -> str:
-        """Adjust the device settings."""
-        if "current_setting" not in self.properties:
-            return f"The {self.name} cannot be adjusted."
-        
-        if not self.properties.get("is_active", False):
-            return f"The {self.name} needs to be activated before adjusting settings."
-        
-        self.properties["current_setting"] = setting
-        return f"You adjust the {self.name} to the '{setting}' setting. The device's behavior changes subtly."
-    
-    def disassemble(self) -> str:
-        """Disassemble the device to examine its components."""
-        if "is_active" not in self.properties:
-            return f"The {self.name} cannot be disassembled."
-        
-        if self.properties.get("is_active", False):
-            return f"The {self.name} is currently active. You should deactivate it before disassembling."
-        
-        return f"You carefully disassemble the {self.name}, revealing intricate gears, circuits, and mysterious components. You reassemble it after your examination."
-    
-    # New interaction methods for tea_set
-    def use(self) -> str:
-        """Use the item (generic interaction)."""
-        if "is_brewing" in self.properties:
-            if self.properties["is_brewing"]:
-                return f"The {self.name} is already in use, brewing a fragrant tea."
-            
-            self.properties["is_brewing"] = True
-            return f"You prepare the {self.name} and start brewing a delightful tea. The aroma fills the air."
-        
-        if "is_filled" in self.properties:
-            if not self.properties["is_filled"]:
-                return f"The {self.name} is empty and needs to be filled first."
-            
-            return f"You use the {self.name} to water the nearby plants. They seem to appreciate it."
-        
-        if "is_focused" in self.properties:
-            self.properties["is_focused"] = True
-            return f"You use the {self.name}, adjusting it carefully. The view becomes crystal clear."
-        
-        return f"You use the {self.name}, but nothing particularly interesting happens."
-    
-    # New interaction methods for stone_bench
-    def sit(self) -> str:
-        """Sit on the item."""
-        return f"You sit on the {self.name} and take a moment to relax. It's quite comfortable and gives you a perfect view of the surroundings."
-    
-    # New interaction methods for old_chest
-    def open(self) -> str:
-        """Open the item if possible."""
-        if "is_locked" not in self.properties:
-            return f"The {self.name} cannot be opened."
-        
-        if self.properties["is_locked"]:
-            return f"The {self.name} is locked. You need to find a key or another way to unlock it."
-        
-        return f"You open the {self.name}, revealing its contents: old letters, photographs, and small trinkets from a bygone era."
-    
-    # New interaction methods for telescope
-    def adjust(self, **kwargs) -> str:
-        """Adjust the item (overloaded method that works for both telescope and mysterious_device)."""
-        if "is_focused" in self.properties:
-            self.properties["is_focused"] = True
-            return f"You carefully adjust the {self.name}, bringing distant objects into sharp focus."
-        
-        # For mysterious_device, reuse the existing adjust method logic
-        if "current_setting" in self.properties:
-            setting = kwargs.get("setting", "default")
-            if not self.properties.get("is_active", False):
-                return f"The {self.name} needs to be activated before adjusting settings."
-            
-            self.properties["current_setting"] = setting
-            return f"You adjust the {self.name} to the '{setting}' setting. The device's behavior changes subtly."
-        
-        return f"You adjust the {self.name}, but nothing seems to change."
 
 
 #NOTE: Space 空間 class
@@ -316,18 +120,12 @@ class NPC(BaseModel):
         action_type: Literal["talk_to_npc"]
         target_npc: str = Field(description="NPC to talk to")
         dialogue: str
-
+    
+    # 新的物品互動模式
     class InteractItemAction(BaseModel):
-        # target_item: str
-        target_item: Dict[str, Dict[str, Optional[Dict[str, type]]]]
-
-    #example
-    class example_interact_with_item(BaseModel):
-        action_type: Literal["example_interact_with_item"]
-        target_item: str
-        interaction: str
-        parameter: str
-
+        action_type: Literal["interact_item"]
+        interact_with: str = Field(description="要互動的物品名稱")
+        how_to_interact: str = Field(description="詳細描述如何與物品互動")
 
     class GeneralResponse(BaseModel):
         self_talk_reasoning: str
@@ -337,99 +135,58 @@ class NPC(BaseModel):
             "NPC.TalkToNPCAction"
         ]] = None
 
-
     def update_schema(self):
         """
-        Dynamically generate schemas based on NPC's current state.
-        Returns a GeneralResponse model with appropriate action schemas.
+        根據 NPC 當前狀態動態生成模式結構。
+        返回適當的 GeneralResponse 模型。
         """
-        # Get valid options from current state
+        # 獲取當前狀態的有效選項
         valid_spaces = [space.name for space in self.current_space.connected_spaces]
         valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
-        available_items = self.current_space.items + self.inventory.items
+        available_items = [item.name for item in self.current_space.items + self.inventory.items]
 
-        # --- Dynamic Item Interaction Schemas ---
-        item_classes = {}
-        for item in available_items:
-            # Second layer: Item-specific class (e.g., ArthurBook)
-            action_classes = {}
-            for action_name, param_spec in item.interactions.items():
-                # Third layer: Action-specific class (e.g., Reading, Writing)
-                fields = {"action_name": Literal[action_name]}
-                
-                # Create class attributes dictionary
-                class_attrs = {
-                    "__annotations__": fields,
-                    "action_name": Field(default=..., description=f"Action: {action_name}")
-                }
-                
-                # Only add parameter field if parameters are required
-                if param_spec is not None:
-                    fields["parameter"] = str  # Add to annotations
-                    class_attrs["parameter"] = Field(default=..., description="Parameter for the action")
-                
-                action_class = type(
-                    action_name.capitalize(),  # e.g., "Read", "Write"
-                    (BaseModel,),
-                    class_attrs
-                )
-                action_classes[action_name] = action_class
-
-            # Second layer: Define the item class
-            item_class_name = item.name.replace("_", "").capitalize()  # e.g., "Arthurbook"
-            item_classes[item.name] = type(
-                item_class_name,
-                (BaseModel,),
-                {
-                    "__annotations__": {
-                        "item_name": Literal[item.name],
-                        "action": Union[tuple(action_classes.values())]
-                    },
-                    "item_name": Field(default=..., description=f"Item: {item.name}")
-                }
-            )
-
-        # First layer: InteractItemAction
-        class InteractItemAction(BaseModel):
-            action_type: Literal["interact_item"]
-            interact_with: Union[tuple(item_classes.values())] if item_classes else Any
-
-        # Static actions
+        # 定義空間移動操作
         class EnterSpaceAction(BaseModel):
             action_type: Literal["enter_space"]
-            target_space: Literal[*valid_spaces] if valid_spaces else str
+            target_space: Literal[*valid_spaces] if valid_spaces else str = Field(description="移動到的空間名稱")
 
+        # 定義與 NPC 對話操作
         class TalkToNPCAction(BaseModel):
             action_type: Literal["talk_to_npc"]
-            target_npc: Literal[*valid_npcs] if valid_npcs else str
-            dialogue: str
+            target_npc: Literal[*valid_npcs] if valid_npcs else str = Field(description="對話對象的名稱")
+            dialogue: str = Field(description="想要說的話")
 
-        # Top-level response
+        # 定義物品互動操作（新版本）
+        class InteractItemAction(BaseModel):
+            action_type: Literal["interact_item"]
+            interact_with: Literal[*available_items] if available_items else str = Field(description="要互動的物品名稱")
+            how_to_interact: str = Field(description="詳細描述如何與物品互動。請使用描述性語言，清楚說明你想要如何使用或操作這個物品。")
+
+        # 頂層響應
         class GeneralResponse(BaseModel):
-            self_talk_reasoning: str
+            self_talk_reasoning: str = Field(description="你對當前情況的思考和分析")
             action: Optional[Union[
                 EnterSpaceAction,
                 InteractItemAction,
                 TalkToNPCAction
-            ]] = None
+            ]] = Field(None, description="你想要執行的動作")
         
         return GeneralResponse
 
-
     def add_space_to_history(self):
         """
-        Append the current space's information (via __str__) to the NPC's history.
+        將當前空間的信息（通過 __str__）附加到 NPC 的歷史記錄中。
         """
         self.history.append({"role": "system", "content": str(self.current_space)})
 
     def print_current_schema(self):
         """
-        Print the actual schema that AI works with
+        打印 AI 使用的實際模式結構
         """
         try:
             print("\n=== GeneralResponse Schema ===")
-            schema = self.GeneralResponse.model_json_schema()
-            # Make it more readable with indentation
+            schema = self.update_schema().model_json_schema()
+            # 使用縮進使其更易讀
             import json
             print(json.dumps(schema, indent=2))
             print("=== GeneralResponse Schema END ===\n")
@@ -440,11 +197,10 @@ class NPC(BaseModel):
                 print(json.dumps(schema, indent=2))
                 print("=== EnterSpaceAction Schema END ===\n")
 
-            if self.current_space.items or self.inventory.items:
-                print("=== InteractItemAction Schema ===")
-                schema = self.InteractItemAction.model_json_schema()
-                print(json.dumps(schema, indent=2))
-                print("=== InteractItemAction Schema END ===\n")
+            print("=== InteractItemAction Schema ===")
+            schema = self.InteractItemAction.model_json_schema()
+            print(json.dumps(schema, indent=2))
+            print("=== InteractItemAction Schema END ===\n")
 
             valid_npcs = [npc for npc in self.current_space.npcs if npc != self]
             if valid_npcs:
@@ -454,14 +210,14 @@ class NPC(BaseModel):
                 print("=== TalkToNPCAction Schema END ===\n")
         except Exception as e:
             print(f"Error printing schema: {str(e)}")
-            # Print additional debug info
+            # 打印額外的調試信息
             print(f"Current space: {self.current_space.name}")
             print(f"Available items: {[item.name for item in self.current_space.items + self.inventory.items]}")
             print(f"Available NPCs: {[npc.name for npc in self.current_space.npcs if npc != self]}")
 
     def move_to_space(self, target_space_name: str) -> str:
         """
-        Move the NPC to a connected space if valid, and update the NPC's position in the spaces' NPC lists.
+        將 NPC 移動到連接的空間，並更新空間的 NPC 列表。
         """
         target_space_name = target_space_name.lower()
 
@@ -520,17 +276,17 @@ class NPC(BaseModel):
         
         # Add the attempted action to history if one exists
         if response.action:
-            if hasattr(response.action, "action_type") and response.action.action_type == "interact_item":
-                interact_with = response.action.interact_with
-                action_content = f"Action: I'm interacting with {interact_with.item_name} using '{interact_with.action.action_name}'"
-                if hasattr(interact_with.action, "parameter"):
-                    action_content += f" with parameter: {interact_with.action.parameter}"
-            elif hasattr(response.action, "action_type") and response.action.action_type == "enter_space":
-                action_content = f"Action: I'm moving to {response.action.target_space}"
-            elif hasattr(response.action, "action_type") and response.action.action_type == "talk_to_npc":
-                action_content = f"Action: I'm talking to {response.action.target_npc} saying: {response.action.dialogue}"
+            if hasattr(response.action, "action_type"):
+                if response.action.action_type == "interact_item":
+                    action_content = f"Action: I'm interacting with {response.action.interact_with} by {response.action.how_to_interact}"
+                elif response.action.action_type == "enter_space":
+                    action_content = f"Action: I'm moving to {response.action.target_space}"
+                elif response.action.action_type == "talk_to_npc":
+                    action_content = f"Action: I'm talking to {response.action.target_npc} saying: {response.action.dialogue}"
+                else:
+                    action_content = "Action: Attempting an unknown action type"
             else:
-                action_content = "Action: Attempting an unknown action type"
+                action_content = "Action: Action has no type specified"
                 
             self.history.append({"role": "assistant", "content": action_content})
         
@@ -549,16 +305,12 @@ class NPC(BaseModel):
         # Process the action based on its type
         if hasattr(action, "action_type"):
             if action.action_type == "interact_item":
-                interact_with = action.interact_with
-                action_data = {
-                    interact_with.item_name: {
-                        interact_with.action.action_name: (
-                            {"content": interact_with.action.parameter}
-                            if hasattr(interact_with.action, "parameter") else None
-                        )
-                    }
-                }
-                result = self.interact_with_item(action_data)
+                # 使用新的互動系統處理物品互動
+                result = world_system.process_interaction(
+                    self, 
+                    action.interact_with, 
+                    action.how_to_interact
+                )
             elif action.action_type == "enter_space":
                 result = self.move_to_space(action.target_space)
             elif action.action_type == "talk_to_npc":
@@ -600,54 +352,6 @@ class NPC(BaseModel):
         return f"{self.name} says to {target_npc.name}: \"{dialogue}\""
 
 
-    def interact_with_item(self, action_data: Dict[str, Dict[str, Optional[Dict[str, Any]]]]) -> str:
-        """
-        Handle interactions with items based on the action data from process_tick.
-        
-        Args:
-            action_data: A dictionary with structure {item_name: {interaction_type: parameters_dict}}
-                         where parameters_dict is either None or a dictionary of parameter values
-        
-        Returns:
-            A string describing the result of the interaction
-        """
-        # Extract item name and interaction details
-        if not action_data:
-            return "No item interaction data provided."
-        
-        # Get the first (and only) item name and its interaction details
-        item_name = next(iter(action_data))
-        interaction_details = action_data[item_name]
-        
-        # Get the first (and only) interaction type and its parameters
-        interaction_type = next(iter(interaction_details))
-        parameters = interaction_details[interaction_type]
-        
-        # Find the item in inventory or current space
-        target_item = None
-        for item in self.inventory.items:
-            if item.name == item_name:
-                target_item = item
-                break
-        
-        if target_item is None:
-            for item in self.current_space.items:
-                if item.name == item_name:
-                    target_item = item
-                    break
-        
-        if target_item is None:
-            return f"Cannot find item '{item_name}' in inventory or current space."
-        
-        # Call the item's interact method with the appropriate parameters
-        if parameters:
-            return target_item.interact(interaction_type, **parameters)
-        else:
-            return target_item.interact(interaction_type)
-
-
-
-
 
 
 # Resolve forward references
@@ -682,88 +386,74 @@ def load_world_from_json(file_path: str) -> Dict[str, Any]:
 
 def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Build the world objects from the loaded JSON data.
+    從加載的 JSON 數據構建世界對象。
     
     Args:
-        world_data: Dictionary containing the world data
+        world_data: 包含世界數據的字典
         
     Returns:
-        Dictionary containing the built world objects
+        包含構建的世界對象的字典
     """
     if not world_data:
-        print("Error: No world data provided")
+        print("錯誤: 未提供世界數據")
         return {}
     
-    # Initialize empty collections
+    # 初始化空集合
     spaces_dict = {}
     items_dict = {}
     npcs_dict = {}
     
-    # First pass: Create all spaces (without connections)
+    # 第一步: 創建所有空間（不含連接）
     for space_data in world_data.get("spaces", []):
         spaces_dict[space_data["name"]] = Space(
             name=space_data["name"],
             description=space_data["description"],
-            connected_spaces=[],  # Will connect later
-            items=[],  # Will add items later
-            npcs=[]  # Will add NPCs later
+            connected_spaces=[],  # 後續連接
+            items=[],  # 後續添加物品
+            npcs=[]  # 後續添加 NPC
         )
     
-    # Second pass: Create all items
+    # 第二步: 創建所有物品
     for item_data in world_data.get("items", []):
-        # Convert interactions format
-        interactions = {}
-        for interaction_name, param_spec in item_data["interactions"].items():
-            if param_spec is None:
-                interactions[interaction_name] = None
-            else:
-                # Convert parameter types from strings to actual types
-                param_dict = {}
-                for param_name, param_type_str in param_spec.items():
-                    # Simple mapping of type strings to actual types
-                    type_map = {"str": str, "int": int, "bool": bool, "float": float}
-                    param_dict[param_name] = type_map.get(param_type_str, str)
-                interactions[interaction_name] = param_dict
-        
+        # 使用簡化的 Item 類創建物品（沒有 interactions 欄位）
         items_dict[item_data["name"]] = Item(
             name=item_data["name"],
             description=item_data["description"],
-            interactions=interactions,
             properties=item_data.get("properties", {})
         )
     
-    # Third pass: Connect spaces and add items to spaces
+    # 第三步: 連接空間並向空間添加物品
     for space_data in world_data.get("spaces", []):
         space = spaces_dict[space_data["name"]]
         
-        # Connect spaces
+        # 連接空間
         for connected_space_name in space_data["connected_spaces"]:
             if connected_space_name in spaces_dict:
                 connected_space = spaces_dict[connected_space_name]
-                # Use biconnect to establish bidirectional connection
+                # 使用 biconnect 建立雙向連接
                 space.biconnect(connected_space)
         
-        # Add items to space
+        # 向空間添加物品
         for item_name in space_data["items"]:
             if item_name in items_dict:
                 space.items.append(items_dict[item_name])
     
-    # Fourth pass: Create NPCs and place them in spaces
+    # 第四步: 創建 NPC 並放入空間
     for npc_data in world_data.get("npcs", []):
-        # Create inventory for NPC
+        # 為 NPC 創建庫存
         inventory = Inventory(items=[])
         
-        # Add items to inventory if specified
+        # 如果指定了庫存物品，則添加到庫存中
         for item_name in npc_data.get("inventory", []):
             if item_name in items_dict:
                 inventory.add_item(items_dict[item_name])
         
-        # Get starting space
+        # 獲取起始空間
         starting_space_name = npc_data.get("starting_space")
         starting_space = spaces_dict.get(starting_space_name)
         
         if starting_space:
-            # Create NPC
+            # 創建 NPC
             npc = NPC(
                 name=npc_data["name"],
                 description=npc_data["description"],
@@ -772,14 +462,14 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
                 history=npc_data.get("history", [])
             )
             
-            # Add NPC to its starting space
+            # 將 NPC 添加到其起始空間
             starting_space.npcs.append(npc)
             
-            # Store NPC in dictionary
+            # 將 NPC 存儲在字典中
             npcs_dict[npc_data["name"]] = npc
     
     return {
-        "world_name": world_data.get("world_name", "Unknown World"),
+        "world_name": world_data.get("world_name", "未知世界"),
         "description": world_data.get("description", ""),
         "spaces": spaces_dict,
         "items": items_dict,
@@ -856,86 +546,65 @@ def select_world():
 
 def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
     """
-    Save the current world state to a JSON file.
+    將當前世界狀態保存到 JSON 文件。
     
     Args:
-        world: Dictionary containing the world objects
-        file_path: Path where to save the JSON file
+        world: 包含世界對象的字典
+        file_path: 保存 JSON 文件的路徑
         
     Returns:
-        True if save was successful, False otherwise
+        保存成功返回 True，否則返回 False
     """
     try:
-        # Create a dictionary to hold the serialized world data
+        # 創建一個字典來保存序列化的世界數據
         world_data = {
-            "world_name": world.get("world_name", "Unknown World"),
+            "world_name": world.get("world_name", "未知世界"),
             "description": world.get("description", ""),
             "spaces": [],
             "items": [],
             "npcs": []
         }
         
-        # Serialize spaces
+        # 序列化空間
         for space_name, space in world["spaces"].items():
             space_data = {
                 "name": space.name,
                 "description": space.description,
                 "connected_spaces": [connected.name for connected in space.connected_spaces],
                 "items": [item.name for item in space.items]
-                # NPCs are handled separately
+                # NPC 單獨處理
             }
             world_data["spaces"].append(space_data)
         
-        # Serialize items
+        # 序列化物品 - 簡化版本，不包含 interactions
         for item_name, item in world["items"].items():
-            # Convert interactions back to string type format
-            interactions = {}
-            for interaction_name, param_spec in item.interactions.items():
-                if param_spec is None:
-                    interactions[interaction_name] = None
-                else:
-                    # Convert parameter types from actual types to strings
-                    param_dict = {}
-                    for param_name, param_type in param_spec.items():
-                        # Map Python types back to strings
-                        type_str = "str"
-                        if param_type == int:
-                            type_str = "int"
-                        elif param_type == bool:
-                            type_str = "bool"
-                        elif param_type == float:
-                            type_str = "float"
-                        param_dict[param_name] = type_str
-                    interactions[interaction_name] = param_dict
-            
             item_data = {
                 "name": item.name,
                 "description": item.description,
-                "interactions": interactions,
                 "properties": item.properties
             }
             world_data["items"].append(item_data)
         
-        # Serialize NPCs
+        # 序列化 NPC
         for npc_name, npc in world["npcs"].items():
             npc_data = {
                 "name": npc.name,
                 "description": npc.description,
                 "starting_space": npc.current_space.name,
                 "inventory": [item.name for item in npc.inventory.items],
-                "history": npc.history  # Save the NPC's memory/history
+                "history": npc.history  # 保存 NPC 的記憶/歷史記錄
             }
             world_data["npcs"].append(npc_data)
         
-        # Write to file
+        # 寫入文件
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(world_data, f, indent=2, ensure_ascii=False)
         
-        print(f"World successfully saved to {file_path}")
+        print(f"成功保存世界至 {file_path}")
         return True
     
     except Exception as e:
-        print(f"Error saving world: {str(e)}")
+        print(f"保存世界時出錯: {str(e)}")
         return False
 
 def prompt_for_save_location(original_file_path: str) -> str:
@@ -969,84 +638,99 @@ def prompt_for_save_location(original_file_path: str) -> str:
 #NOTE: Main Loop
 def SandBox():
     """
-    Main sandbox function that handles world selection, loading, and the game loop.
-    This function allows users to interact with NPCs in the selected world.
+    主沙盒函數，處理世界選擇、加載和遊戲循環。
+    此函數允許用戶與選定世界中的 NPC 互動。
     """
-    # Select and load a world
+    # 聲明使用全局變量
+    global world_system
+    
+    # 選擇並加載一個世界
     world_file_path = select_world()
     world_data = load_world_from_json(world_file_path)
     world = build_world_from_data(world_data)
     
-    # Get all NPCs from the world
+    # 初始化 AI_System 並設置為全局變量
+    world_system = AI_System(
+        time="中午",
+        weather="晴朗",
+        history=[]
+    )
+    world_system.initialize_world(world)
+    
+    # 打印系統信息
+    print(f"世界系統已初始化 - 時間: {world_system.time}, 天氣: {world_system.weather}")
+    
+    # 獲取世界中的所有 NPC
     npcs = list(world["npcs"].values())
     
     if not npcs:
-        print("Warning: No NPCs found in this world. The simulation will be limited.")
-        print(f"World loaded: {world['world_name']}")
-        print(f"Description: {world['description']}")
-        print(f"Spaces: {', '.join(world['spaces'].keys())}")
-        print(f"Items: {', '.join(world['items'].keys())}")
+        print("警告: 此世界中未找到 NPC。模擬將受到限制。")
+        print(f"已加載世界: {world['world_name']}")
+        print(f"描述: {world['description']}")
+        print(f"空間: {', '.join(world['spaces'].keys())}")
+        print(f"物品: {', '.join(world['items'].keys())}")
         
-        # Simple loop for worlds without NPCs
+        # 沒有 NPC 的簡單循環
         while True:
             print("=====================")
-            user_input = input("e -> exit, i -> info: ").strip().lower()
+            user_input = input("e -> 退出, i -> 信息: ").strip().lower()
             
             if user_input == "e":
-                # Prompt for saving before exit
+                # 退出前提示保存
                 save_path = prompt_for_save_location(world_file_path)
                 save_world_to_json(world, save_path)
-                print("Exiting...")
+                print("正在退出...")
                 break
             elif user_input == "i":
-                print(f"World: {world['world_name']}")
-                print(f"Description: {world['description']}")
-                print(f"Spaces: {', '.join(world['spaces'].keys())}")
-                print(f"Items: {', '.join(world['items'].keys())}")
+                print(f"世界: {world['world_name']}")
+                print(f"描述: {world['description']}")
+                print(f"空間: {', '.join(world['spaces'].keys())}")
+                print(f"物品: {', '.join(world['items'].keys())}")
+                print(f"時間: {world_system.time}, 天氣: {world_system.weather}")
             else:
-                print("No NPCs to interact with. Try a different world or add NPCs to this one.")
+                print("沒有可互動的 NPC。嘗試不同的世界或向這個世界添加 NPC。")
     else:
-        # Print world info
-        print(f"World loaded: {world['world_name']}")
-        print(f"Description: {world['description']}")
-        print(f"NPCs: {', '.join([npc.name for npc in npcs])}")
+        # 打印世界信息
+        print(f"已加載世界: {world['world_name']}")
+        print(f"描述: {world['description']}")
+        print(f"NPC: {', '.join([npc.name for npc in npcs])}")
         
-        # Select which NPC to focus on for detailed interactions
+        # 選擇要關注的 NPC 進行詳細互動
         active_npc_index = 0
         if len(npcs) > 1:
-            print("\n=== Available NPCs ===")
+            print("\n=== 可用的 NPC ===")
             for i, npc in enumerate(npcs, 1):
                 print(f"{i}. {npc.name} - {npc.description}")
             
             while True:
-                npc_choice = input("Select an NPC to focus on (number): ").strip()
+                npc_choice = input("選擇要關注的 NPC (數字): ").strip()
                 if npc_choice.isdigit() and 1 <= int(npc_choice) <= len(npcs):
                     active_npc_index = int(npc_choice) - 1
                     break
-                print(f"Please enter a number between 1 and {len(npcs)}")
+                print(f"請輸入 1 到 {len(npcs)} 之間的數字")
         
         active_npc = npcs[active_npc_index]
-        print(f"Focusing on NPC: {active_npc.name}")
+        print(f"正在關注 NPC: {active_npc.name}")
         
-        # Main game loop
+        # 主遊戲循環
         while True:
             print("=====================")
-            user_input = input("c -> continue, e -> exit, p -> print history, s -> show schema, n -> switch NPC: ").strip().lower()
+            user_input = input("c -> 繼續, e -> 退出, p -> 打印歷史, s -> 顯示模式, n -> 切換 NPC, w -> 改變天氣和時間: ").strip().lower()
 
             if user_input == "c":
-                # Process a tick for all NPCs, but only show result for active NPC
+                # 處理所有 NPC 的 tick，但只顯示活躍 NPC 的結果
                 for npc in npcs:
                     result = npc.process_tick()
                     if npc == active_npc:
-                        print(f"[{npc.name}] Tick Result: {result}")
+                        print(f"[{npc.name}] Tick 結果: {result}")
                 print()
                 print()
 
             elif user_input == "e":
-                # Prompt for saving before exit
+                # 退出前提示保存
                 save_path = prompt_for_save_location(world_file_path)
                 save_world_to_json(world, save_path)
-                print("Exiting...")
+                print("正在退出...")
                 break
 
             elif user_input == "p":
@@ -1055,9 +739,9 @@ def SandBox():
                     from rich.panel import Panel
                     
                     console = Console()
-                    print(f"History for {active_npc.name}:")
+                    print(f"{active_npc.name} 的歷史記錄:")
                     
-                    # Group messages by consecutive role
+                    # 按連續角色分組消息
                     grouped_messages = []
                     current_group = None
                     
@@ -1066,46 +750,46 @@ def SandBox():
                         content = message['content']
                         
                         if current_group is None or current_group['role'] != role:
-                            # Start a new group
+                            # 開始新組
                             current_group = {'role': role, 'contents': [content]}
                             grouped_messages.append(current_group)
                         else:
-                            # Add to existing group
+                            # 添加到現有組
                             current_group['contents'].append(content)
                     
-                    # Display each group
+                    # 顯示每個組
                     for group in grouped_messages:
                         role = group['role']
                         contents = group['contents']
                         
-                        # Set style based on role
+                        # 根據角色設置樣式
                         if role == "system":
                             style = "blue"
-                            title = "SYSTEM"
+                            title = "系統"
                         elif role == "assistant":
                             style = "green"
                             title = active_npc.name.upper()
                         elif role == "user":
                             style = "yellow"
-                            title = "USER"
+                            title = "用戶"
                         else:
                             style = "white"
                             title = role.upper()
                         
-                        # Join all contents with line breaks
+                        # 用換行符連接所有內容
                         combined_content = "\n".join(contents)
                         
-                        # Create a panel with the role name at the top, followed by content on new lines
+                        # 創建面板，頂部顯示角色名稱，然後是新行上的內容
                         panel_text = f"{title}:\n{combined_content}"
                         panel = Panel(panel_text, border_style=style)
                         
-                        # Print the panel
+                        # 打印面板
                         console.print(panel)
                         
                 except ImportError:
-                    # Fallback if rich is not installed
-                    print("For better formatting, install the 'rich' library with: pip install rich")
-                    print(f"History for {active_npc.name}:")
+                    # 如果 rich 未安裝，回退
+                    print("為了更好的格式化，安裝 'rich' 庫: pip install rich")
+                    print(f"{active_npc.name} 的歷史記錄:")
                     
                     current_role = None
                     role_messages = []
@@ -1115,21 +799,21 @@ def SandBox():
                         content = message['content']
                         
                         if current_role is None or current_role != role:
-                            # Print previous role's messages if any
+                            # 如果有先前角色的消息，則打印
                             if role_messages:
                                 print(f"{current_role.upper()}:")
                                 for msg in role_messages:
                                     print(f"  {msg}")
                                 print()
                             
-                            # Start new role
+                            # 開始新角色
                             current_role = role
                             role_messages = [content]
                         else:
-                            # Add to current role
+                            # 添加到當前角色
                             role_messages.append(content)
                     
-                    # Print the last group
+                    # 打印最後一組
                     if role_messages:
                         print(f"{current_role.upper()}:")
                         for msg in role_messages:
@@ -1140,26 +824,301 @@ def SandBox():
                 active_npc.print_current_schema()
                 
             elif user_input == "n" and len(npcs) > 1:
-                print("\n=== Available NPCs ===")
+                print("\n=== 可用的 NPC ===")
                 for i, npc in enumerate(npcs, 1):
                     print(f"{i}. {npc.name} - {npc.description}")
                 
                 while True:
-                    npc_choice = input("Select an NPC to focus on (number): ").strip()
+                    npc_choice = input("選擇要關注的 NPC (數字): ").strip()
                     if npc_choice.isdigit() and 1 <= int(npc_choice) <= len(npcs):
                         active_npc_index = int(npc_choice) - 1
                         active_npc = npcs[active_npc_index]
-                        print(f"Now focusing on: {active_npc.name}")
+                        print(f"現在關注: {active_npc.name}")
                         break
-                    print(f"Please enter a number between 1 and {len(npcs)}")
+                    print(f"請輸入 1 到 {len(npcs)} 之間的數字")
+            
+            elif user_input == "w":
+                # 新增功能：更改世界系統的時間和天氣
+                print(f"當前時間: {world_system.time}")
+                print(f"當前天氣: {world_system.weather}")
+                
+                new_time = input("輸入新的時間 (直接按 Enter 保持不變): ").strip()
+                if new_time:
+                    world_system.time = new_time
+                
+                new_weather = input("輸入新的天氣 (直接按 Enter 保持不變): ").strip()
+                if new_weather:
+                    world_system.weather = new_weather
+                
+                print(f"更新後 - 時間: {world_system.time}, 天氣: {world_system.weather}")
 
             else:
-                # Process user input for the active NPC only
+                # 只處理活躍 NPC 的用戶輸入
                 result = active_npc.process_tick(user_input)
-                print(f"[{active_npc.name}] Tick Result: {result}")
+                print(f"[{active_npc.name}] Tick 結果: {result}")
                 print()
                 print()
+
+
+#NOTE: AI_System class
+class AI_System(BaseModel):
+    """
+    系統 AI 負責解釋和處理 NPC AI 的互動意圖，
+    並根據這些意圖修改世界狀態（創建/刪除物品、修改物品描述等）。
+    """
+    time: str = "中午"  # 時間描述
+    weather: str = "晴朗"  # 天氣描述
+    history: List[Dict[str, str]] = []  # 系統歷史記錄
+    world: Dict[str, Any] = {}  # 世界狀態的引用
+    
+    class CreateItemFunction(BaseModel):
+        function_type: Literal["create_item"]
+        item_name: str = Field(description="新物品的名稱")
+        description: str = Field(description="新物品的描述")
+        space_name: str = Field(description="物品將被放置的空間名稱")
+    
+    class DeleteItemFunction(BaseModel):
+        function_type: Literal["delete_item"]
+        item_name: str = Field(description="要刪除的物品名稱")
+        space_name: Optional[str] = Field(None, description="物品所在的空間名稱（如果不在任何 NPC 的庫存中）")
+        npc_name: Optional[str] = Field(None, description="持有物品的 NPC 名稱（如果在 NPC 的庫存中）")
+    
+    class ChangeItemDescriptionFunction(BaseModel):
+        function_type: Literal["change_item_description"]
+        item_name: str = Field(description="要修改的物品名稱")
+        new_description: str = Field(description="物品的新描述")
+    
+    class DeleteAndCreateNewItemFunction(BaseModel):
+        function_type: Literal["delete_and_create_new_item"]
+        old_item_name: str = Field(description="要替換的物品名稱")
+        new_item_name: str = Field(description="新物品的名稱")
+        new_description: str = Field(description="新物品的描述")
+        space_name: str = Field(description="物品所在的空間名稱")
+    
+    class MoveItemToInventoryFunction(BaseModel):
+        function_type: Literal["move_item_to_inventory"]
+        item_name: str = Field(description="要移動的物品名稱")
+        npc_name: str = Field(description="接收物品的 NPC 名稱")
+    
+    class GeneralResponse(BaseModel):
+        reasoning: str = Field(description="系統對 NPC 行為的內部分析和思考")
+        response_to_AI: str = Field(description="系統對 NPC 的回應，描述行為結果")
+        function: Optional[Union[
+            "AI_System.CreateItemFunction",
+            "AI_System.DeleteItemFunction",
+            "AI_System.ChangeItemDescriptionFunction",
+            "AI_System.DeleteAndCreateNewItemFunction",
+            "AI_System.MoveItemToInventoryFunction"
+        ]] = None
+    
+    def initialize_world(self, world: Dict[str, Any]):
+        """
+        初始化系統並儲存世界狀態的引用。
+        
+        Args:
+            world: 包含世界狀態的字典
+        """
+        self.world = world
+    
+    def process_interaction(self, npc: "NPC", item_name: str, how_to_interact: str) -> str:
+        """
+        處理 NPC 與物品的互動。
+        
+        Args:
+            npc: 執行互動的 NPC
+            item_name: 互動物品的名稱
+            how_to_interact: 描述 NPC 如何與物品互動
+            
+        Returns:
+            互動結果的描述字串
+        """
+        # 確認物品存在
+        target_item = None
+        item_location = None
+        
+        # 檢查 NPC 的庫存
+        for item in npc.inventory.items:
+            if item.name == item_name:
+                target_item = item
+                item_location = "inventory"
+                break
+        
+        # 檢查當前空間
+        if target_item is None:
+            for item in npc.current_space.items:
+                if item.name == item_name:
+                    target_item = item
+                    item_location = "space"
+                    break
+        
+        if target_item is None:
+            return f"找不到名為 '{item_name}' 的物品。"
+        
+        # 準備互動訊息
+        interaction_message = {
+            "role": "system",
+            "content": f"{npc.name} 正在嘗試與 {item_name} 互動：{how_to_interact}\n"
+                      f"物品描述: {target_item.description}\n"
+                      f"物品位置: {'NPC 的庫存中' if item_location == 'inventory' else '當前空間'}"
+        }
+        
+        # 將互動訊息加入歷史記錄
+        self.history.append(interaction_message)
+        
+        # 使用 AI 來解釋互動並生成響應
+        completion = client.beta.chat.completions.parse(
+            model="gpt-4o-2024-11-20",
+            messages=self.history,
+            response_format=self.GeneralResponse
+        )
+        response = completion.choices[0].message.parsed
+        
+        # 將 AI 的解釋和響應添加到歷史記錄
+        self.history.append({
+            "role": "assistant",
+            "content": f"系統思考: {response.reasoning}\n回應: {response.response_to_AI}"
+        })
+        
+        # 處理可能的功能調用
+        if response.function:
+            result = self._handle_function(response.function, npc)
+            if result:
+                self.history.append({
+                    "role": "system",
+                    "content": f"系統執行功能: {result}"
+                })
+        
+        return response.response_to_AI
+    
+    def _handle_function(self, function: Any, npc: "NPC") -> str:
+        """
+        根據功能類型處理功能調用。
+        
+        Args:
+            function: 要執行的功能
+            npc: 觸發功能的 NPC
+            
+        Returns:
+            功能執行結果的描述
+        """
+        if hasattr(function, "function_type"):
+            if function.function_type == "create_item":
+                return self._create_item(function.item_name, function.description, function.space_name)
+            elif function.function_type == "delete_item":
+                return self._delete_item(function.item_name, function.space_name, function.npc_name)
+            elif function.function_type == "change_item_description":
+                return self._change_item_description(function.item_name, function.new_description)
+            elif function.function_type == "delete_and_create_new_item":
+                return self._delete_and_create_new_item(
+                    function.old_item_name, function.new_item_name, 
+                    function.new_description, function.space_name
+                )
+            elif function.function_type == "move_item_to_inventory":
+                return self._move_item_to_inventory(function.item_name, function.npc_name)
+        
+        return "未知的功能類型。"
+    
+    def _create_item(self, item_name: str, description: str, space_name: str) -> str:
+        """創建新物品並放入指定空間。"""
+        space = self.world["spaces"].get(space_name)
+        if not space:
+            return f"找不到名為 '{space_name}' 的空間。"
+        
+        # 創建新物品（不再需要 interactions）
+        new_item = Item(
+            name=item_name,
+            description=description,
+            properties={}  # 默認空屬性
+        )
+        
+        # 將物品添加到世界物品字典中
+        self.world["items"][item_name] = new_item
+        
+        # 將物品添加到空間
+        space.items.append(new_item)
+        
+        return f"在 {space_name} 創建了新物品: {item_name}"
+    
+    def _delete_item(self, item_name: str, space_name: Optional[str], npc_name: Optional[str]) -> str:
+        """從空間或 NPC 庫存中刪除物品。"""
+        # 從空間中刪除
+        if space_name:
+            space = self.world["spaces"].get(space_name)
+            if not space:
+                return f"找不到名為 '{space_name}' 的空間。"
+            
+            for i, item in enumerate(space.items):
+                if item.name == item_name:
+                    space.items.pop(i)
+                    # 如果物品不被任何其他地方引用，則從世界中刪除
+                    if item_name in self.world["items"]:
+                        del self.world["items"][item_name]
+                    return f"從 {space_name} 刪除了物品: {item_name}"
+        
+        # 從 NPC 庫存中刪除
+        if npc_name:
+            npc = self.world["npcs"].get(npc_name)
+            if not npc:
+                return f"找不到名為 '{npc_name}' 的 NPC。"
+            
+            for i, item in enumerate(npc.inventory.items):
+                if item.name == item_name:
+                    npc.inventory.items.pop(i)
+                    # 如果物品不被任何其他地方引用，則從世界中刪除
+                    if item_name in self.world["items"]:
+                        del self.world["items"][item_name]
+                    return f"從 {npc_name} 的庫存中刪除了物品: {item_name}"
+        
+        return f"找不到物品 '{item_name}'。"
+    
+    def _change_item_description(self, item_name: str, new_description: str) -> str:
+        """修改物品的描述。"""
+        if item_name in self.world["items"]:
+            item = self.world["items"][item_name]
+            item.description = new_description
+            return f"更新了物品 '{item_name}' 的描述。"
+        return f"找不到物品 '{item_name}'。"
+    
+    def _delete_and_create_new_item(self, old_item_name: str, new_item_name: str, 
+                                   new_description: str, space_name: str) -> str:
+        """刪除舊物品並創建新物品（例如：修復損壞的物品）。"""
+        # 刪除舊物品
+        delete_result = self._delete_item(old_item_name, space_name, None)
+        if "刪除了物品" not in delete_result:
+            return f"無法替換物品：{delete_result}"
+        
+        # 創建新物品
+        create_result = self._create_item(new_item_name, new_description, space_name)
+        if "創建了新物品" not in create_result:
+            return f"刪除了舊物品，但無法創建新物品：{create_result}"
+        
+        return f"將 '{old_item_name}' 替換為 '{new_item_name}'。"
+    
+    def _move_item_to_inventory(self, item_name: str, npc_name: str) -> str:
+        """將物品從當前空間移動到 NPC 的庫存中。"""
+        npc = self.world["npcs"].get(npc_name)
+        if not npc:
+            return f"找不到名為 '{npc_name}' 的 NPC。"
+        
+        # 在當前空間中查找物品
+        item = None
+        for i, space_item in enumerate(npc.current_space.items):
+            if space_item.name == item_name:
+                item = space_item
+                npc.current_space.items.pop(i)
+                break
+        
+        if not item:
+            return f"在 {npc.current_space.name} 中找不到物品 '{item_name}'。"
+        
+        # 將物品添加到 NPC 的庫存
+        result = npc.inventory.add_item(item)
+        return f"{npc_name} 撿起了 {item_name}。{result}"
+
+
+
 
 # Run the sandbox
 if __name__ == "__main__":
     SandBox()
+
