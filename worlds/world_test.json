@@ -6,29 +6,59 @@
             "id": "living_room",
             "name": "客廳",
             "description": "一個溫馨的客廳，有舒適的沙發和一個咖啡桌。",
-            "connections": ["kitchen", "bedroom"],
-            "items": ["book", "remote"]
+            "connections": ["kitchen", "corridor"],
+            "items": ["corridor_door", "kitchen_door", "magazine", "remote", "sofa", "table_living", "piano"]
+        },
+        {
+            "id": "corridor",
+            "name": "走廊",
+            "description": "一個溫馨的走廊，連接著客廳和臥室、書房。",
+            "connections": ["living_room", "bedroom","bookroom","bathroom"],
+            "items": []
         },
         {
             "id": "kitchen",
             "name": "廚房",
             "description": "一個乾淨的廚房，有各種烹飪器具。",
             "connections": ["living_room"],
-            "items": ["apple", "knife"]
+            "items": ["kitchen_door", "refrigerator", "knife", "sink_kitchen"]
         },
         {
             "id": "bedroom",
             "name": "臥室",
             "description": "一個整潔的臥室，有一張大床和一個書桌。",
             "connections": ["living_room"],
-            "items": ["diary", "pen"]
+            "items": ["bedroom_door", "diary", "pen", "bed", "table_bedroom"]
+        },
+        {
+            "id": "bookroom",
+            "name": "書房",
+            "description": "一個整潔的書房，有一張大床和一個書桌。",
+            "connections": ["corridor"],
+            "items": ["bookroom_door", "table_bookroom", "pencil", "shelf", "book"]
+        },
+        {
+            "id": "bathroom",
+            "name": "浴室",
+            "description": "一個整潔的浴室，有一個浴缸和一個蓮蓬頭。",
+            "connections": ["corridor"],
+            "items": ["bathroom_door", "tub", "shower", "sink_bathroom"]
+        },
+        {
+            "id": "restroom",
+            "name": "廁所",
+            "description": "一個整潔的廁所，有一個廁位和一些衛浴用品。",
+            "connections": ["corridor"],
+            "items": ["restroom_door", "tissue", "toilet"]
         }
     ],
     "items": [
         {
-            "id": "book",
-            "name": "書",
-            "description": "一本有關AI歷史的書籍",
+            "id": "magazine",
+            "name": "雜誌",
+            "description": "一本有關AI歷史的雜誌",
+            "type": "magazine",
+            "position": [46, 232],
             "content": "人工智能的發展歷程充滿了起伏...",
             "interactions": [
                 {
@@ -38,6 +68,9 @@
                 {
                     "name": "拿取",
                     "params": null
+                },{
+                    "name": "放回",
+                    "params": null
                 }
             ]
         },
@@ -45,6 +78,8 @@
             "id": "remote",
             "name": "遙控器",
             "description": "電視的遙控器",
+            "type": "remote",
+            "position": [68, 92],
             "interactions": [
                 {
                     "name": "使用",
@@ -55,16 +90,51 @@
                 {
                     "name": "拿取",
                     "params": null
+                },
+                {
+                    "name": "放回",
+                    "params": null
                 }
             ]
         },
         {
-            "id": "apple",
-            "name": "蘋果",
-            "description": "一個紅色的新鮮蘋果",
+            "id": "sofa",
+            "name": "沙發",
+            "description": "一個舒適的沙發",
+            "type": "sofa",
+            "position": [300, 225],
             "interactions": [
                 {
-                    "name": "吃",
+                    "name": "坐下",
+                    "params": null
+                },
+                {
+                    "name": "站起",
+                    "params": null
+                }
+            ]
+        },{
+            "id": "piano",
+            "name": "鋼琴",
+            "description": "一架漂亮的鋼琴",
+            "type": "piano",
+            "position": [489, 100],
+            "interactions": [
+                {
+                    "name": "彈奏",
+                    "params": null
+                }
+            ]
+        },
+        {
+            "id": "refrigerator",
+            "name": "冰箱",
+            "description": "一個冰箱",
+            "type": "refrigerator",
+            "position": [234, 766],
+            "interactions": [
+                {
+                    "name": "存入",
                     "params": null
                 },
                 {
@@ -77,6 +147,8 @@
             "id": "knife",
             "name": "刀",
             "description": "一把鋒利的廚房刀",
+            "type": "knife",
+            "position": [38, 476],
             "interactions": [
                 {
                     "name": "使用",
@@ -89,11 +161,28 @@
                     "params": null
                 }
             ]
-        },
-        {
+        },{
+            "id": "sink_kitchen",
+            "name": "水槽",
+            "description": "一個水槽",
+            "type": "sink",
+            "position": [49, 616],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
+                    "params": null
+                }
+            ]
+        },{
             "id": "diary",
             "name": "日記",
             "description": "一本私人日記",
+            "type": "diary",
+            "position": [123, 456],
             "content": "今天是個美好的一天...",
             "interactions": [
                 {
@@ -116,6 +205,8 @@
             "id": "pen",
             "name": "筆",
             "description": "一支黑色的圓珠筆",
+            "type": "pen",
+            "position": [234, 567],
             "interactions": [
                 {
                     "name": "使用",
@@ -125,6 +216,235 @@
                 },
                 {
                     "name": "拿取",
+                    "params": null
+                }
+            ]
+        },{
+            "id": "book",
+            "name": "書",
+            "description": "一本書",
+            "type": "book",
+            "position": [571, 721],
+            "interactions": [
+                {
+                    "name": "閱讀",
+                    "params": null
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                },{
+                    "name": "放回",
+                    "params": null
+                }
+            ]
+        },{ 
+            "id": "shelf",
+            "name": "書架",
+            "description": "一個書架",
+            "type": "shelf",
+            "position": [571, 721],
+            "interactions": []
+        },{
+            "id": "pencil",
+            "name": "鉛筆",
+            "description": "一枝鉛筆",
+            "type": "pencil",
+            "position": [825, 652],
+            "interactions": [
+                {
+                    "name": "使用",
+                    "params": {
+                        "action": "str"
+                    }
+                },
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        },{ 
+            "id": "bed",
+            "name": "床",
+            "description": "一張床",
+            "type": "bed",
+            "position": [641, 133],
+            "interactions": [
+                {
+                    "name": "躺下",
+                    "params": null
+                },{
+                    "name": "起來",
+                    "params": null
+                }
+            ]
+        },{ 
+            "id": "tub",
+            "name": "浴缸",
+            "description": "一個浴缸",
+            "type": "tub",
+            "position": [1094, 133],
+            "interactions": [
+                {
+                    "name": "坐浴",
+                    "params": null
+                }
+            ]
+        },{ 
+            "id": "sink_bathroom",
+            "name": "水槽",
+            "description": "一個水槽",
+            "type": "sink",
+            "position": [887, 103],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
+                    "params": null
+                }
+            ]
+        },{
+            "id": "shower",
+            "name": "蓮蓬頭",
+            "description": "一個蓮蓬頭",
+            "type": "shower",
+            "position": [1090, 197],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
+                    "params": null
+                }
+            ]
+        },{ 
+            "id": "tissue",
+            "name": "紙巾",
+            "description": "一包紙巾",
+            "type": "tissue",
+            "position": [1108, 249],
+            "interactions": [
+                {
+                    "name": "拿取",
+                    "params": null
+                }
+            ]
+        },{ 
+            "id": "toilet",
+            "name": "馬桶",
+            "description": "一個馬桶",
+            "type": "toilet",
+            "position": [1084, 290],
+            "interactions": [
+                {
+                    "name": "使用",
+                    "params": null
+                }
+            ]
+        },{
+            "id": "table_livingroom",
+            "name": "客廳桌子",
+            "description": "一張客廳桌子",
+            "type": "table",
+            "position": [240, 178],
+            "interactions": []
+        },{
+            "id": "table_bedroom",
+            "name": "臥室桌子",
+            "description": "一張臥室桌子",
+            "type": "table",
+            "position": [838, 137],
+            "interactions": []
+        },{
+            "id": "table_bookroom",
+            "name": "書房桌子",
+            "description": "一張書房桌子",
+            "type": "table",
+            "position": [825, 685],
+            "interactions": []
+        },{
+            "id": "corridor_door",
+            "name": "走廊門",
+            "description": "一扇普通的門，用來連接走廊和客廳",
+            "type": "door",
+            "position": [523, 412],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
+                    "params": null
+                }
+            ]
+        },
+        {
+            "id": "kitchen_door",
+            "name": "廚房門",
+            "description": "一扇普通的門，用來連接廚房和客廳",
+            "type": "door",
+            "position": [227, 462],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
+                    "params": null
+                }
+            ]
+        },{
+            "id": "bedroom_door",
+            "name": "臥室門",
+            "description": "一扇普通的門，用來連接臥室和客廳",
+            "type": "door",
+            "position": [800, 359],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
+                    "params": null
+                }
+            ]
+        },{
+            "id": "bathroom_door",
+            "name": "浴室門",
+            "description": "一扇普通的門，用來連接浴室和客廳",
+            "type": "door",
+            "position": [919, 237],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
+                    "params": null
+                }
+            ]
+        },{
+            "id": "restroom_door",
+            "name": "廁所門",
+            "description": "一扇普通的門，用來連接廁所和客廳",
+            "type": "door",
+            "position": [975, 289],
+            "interactions": [
+                {
+                    "name": "打開",
+                    "params": null
+                },
+                {
+                    "name": "關閉",
                     "params": null
                 }
             ]
