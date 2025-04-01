@@ -23,7 +23,7 @@ from history.history_manager import print_history
 pygame.init()
 
 # 設置窗口大小和標題
-window_size = (1280, 720)
+window_size = (1500, 700)
 screen = pygame.display.set_mode(window_size)
 pygame.display.set_caption("AI NPC 模擬系統")
 
@@ -51,36 +51,61 @@ except:
 
 # 設定固定的座標
 space_positions = {
-    '客廳': (0, 0),
-    '臥室': (505, 0),
-    '廚房': (0, 446),
-    '浴室': (828, 0),
-    '浴室2': (995, 222),
-    '書房': (505, 446)
+    '客廳': (16, 26),
+    '臥室': (539, 26),
+    '廚房': (16, 453.5),
+    '浴室': (869.5, 26),
+    '浴室2': (995, 253.5),
+    '書房': (539, 476.5),
+    '走廊':(539, 374),
+    '走廊2':(869.5, 253.5),
+    '陽台':(869.5, 476.5)
 }
 space_center = {
-    '客廳': (497.5, 361),
-    '臥室': (666.5, 169.5),
-    '廚房': (129.5, 584),
-    '浴室': (963.5, 138),
-    '浴室2': (1072, 269.5),
-    '書房': (666.5, 584)
+    '客廳': (497.5 * 1.05, 361 * 1.05),
+    '臥室': (666.5 * 1.05, 169.5 * 1.05),
+    '廚房': (129.5 * 1.05, 584 * 1.05),
+    '浴室': (963.5 * 1.05, 138 * 1.05),
+    '廁所': (1072 * 1.05, 269.5 * 1.05),
+    '書房': (666.5 * 1.05, 584 * 1.05)
 }
 space_size = {
-    '客廳': (995, 722),
-    '臥室': (323, 339),
-    '廚房': (259, 276),
-    '浴室': (271, 222),
-    '浴室2': (154, 95),
-    '書房': (323, 276)
+    '客廳': (507, 729),
+    '臥室': (323, 340.5),
+    '廚房': (260, 275.5),
+    '浴室': (270, 222),
+    '浴室2': (155, 214),
+    '書房': (323, 278.5),
+    '走廊':(330, 95),
+    '走廊2':(119, 214),
+    '陽台':(270, 278.5)
 }
 item_positions = {
-    '書':(46,232),
-    '遙控器':(68,92),
-    '蘋果':(234,766),
-    '刀':(38,476),
-    '臥室門':(764,352),
-    
+    '雜誌': (46, 232),
+    '遙控器': (68, 92),
+    '沙發': (300, 225),
+    '鋼琴': (489, 100),
+    '冰箱': (234, 666),
+    '刀': (38, 476),
+    '水槽': (49, 616),
+    '日記': (790, 123),
+    '筆': (567, 234),
+    '書': (571, 721),
+    '書架': (571, 721),
+    '鉛筆': (825, 652),
+    '床': (641, 133),
+    '浴缸': (1094, 133),
+    '蓮蓬頭': (1090, 197),
+    '紙巾': (1108, 249),
+    '馬桶': (1084, 290),
+    '客廳桌子': (240, 178),
+    '臥室桌子': (838, 137),
+    '書房桌子': (825, 685),
+    '走廊門': (523, 412),
+    '廚房門': (227, 462),
+    '臥室門': (800, 359),
+    '浴室門': (919, 237),
+    '廁所門': (975, 289)
 }
 item_size = {
     '臥室門':(91.5,14.5),
@@ -92,7 +117,7 @@ space_colors = {
     '臥室': RED,
     '廚房': CYAN,
     '浴室': BLUE,
-    '浴室2': BLUE,
+    '廁所': BLUE,
     '書房': YELLOW
 }
 
@@ -124,7 +149,7 @@ class Game:
         self.thinking = False  # NPC是否在思考
         self.font_large = pygame.font.Font('pygame/msjh.ttf', 36)  # 字體
         self.font_small = pygame.font.Font('pygame/msjh.ttf', 24)  # 按鈕字體
-        self.screen_width = 1200  # 屏幕寬度
+        self.screen_width = 1500  # 屏幕寬度
         self.screen_height = 800  # 屏幕高度
         self.thinking_thread = None  # 思考線程
         self.thinking_result = None  # 思考結果
@@ -189,9 +214,22 @@ class Game:
             }
         ]
 
-        # 設置遊戲窗口
-        self.screen = pygame.display.set_mode((1200, 800))
-        pygame.display.set_caption("AI NPC 遊戲")
+        # 增加歷史記錄顯示相關變量
+        self.show_history = False  # 是否顯示歷史記錄
+        self.history_surface = None  # 歷史記錄顯示區
+        self.history_rect = pygame.Rect(
+            self.screen_width - 450,  # 距離右邊緣450
+            self.screen_height - 450,  # 距離底部450
+            420,  # 寬度
+            380  # 高度
+        )
+        self.history_font = pygame.font.Font('pygame/msjh.ttf', 14)  # 歷史記錄文字字體
+        self.history_lines = []  # 歷史記錄行
+        self.history_scroll = 0  # 歷史記錄滾動位置
+        
+        # 歷史記錄顯示配置
+        self.history_max_line_width = 390  # 每行最大寬度（像素）
+        self.history_scroll_speed = 10  # 滾動速度（像素）
 
     def load_world(self):
         """載入世界數據"""
@@ -341,6 +379,53 @@ class Game:
             text = font.render(space_name, True, BLACK)
             screen.blit(text, (pos[0] - self.offset_x + 10, pos[1] - self.offset_y + 10))
             
+            # 繪製牆壁（邊框）
+            wall_thickness = 5
+            
+            # 確定出入口位置
+            entrance_width = 50
+            entrance_height = 50
+            
+            # 上牆壁（保留出入口）
+            pygame.draw.rect(screen, self.BROWN,
+                           (pos[0] - self.offset_x, pos[1] - self.offset_y,
+                            space_size[space_name][0], wall_thickness))
+            # 下牆壁（保留出入口）
+            pygame.draw.rect(screen, self.BROWN,
+                           (pos[0] - self.offset_x, pos[1] - self.offset_y + space_size[space_name][1] - wall_thickness,
+                            space_size[space_name][0], wall_thickness))
+            # 左牆壁（保留出入口）
+            pygame.draw.rect(screen, self.BROWN,
+                           (pos[0] - self.offset_x, pos[1] - self.offset_y,
+                            wall_thickness, space_size[space_name][1]))
+            # 右牆壁（保留出入口）
+            pygame.draw.rect(screen, self.BROWN,
+                           (pos[0] - self.offset_x + space_size[space_name][0] - wall_thickness,
+                            pos[1] - self.offset_y,
+                            wall_thickness, space_size[space_name][1]))
+            
+            # 繪製出入口（門）
+            # 上出入口
+            pygame.draw.rect(screen, self.SILVER,
+                           (pos[0] - self.offset_x + space_size[space_name][0]//2 - entrance_width//2,
+                            pos[1] - self.offset_y - entrance_height,
+                            entrance_width, entrance_height))
+            # 下出入口
+            pygame.draw.rect(screen, self.SILVER,
+                           (pos[0] - self.offset_x + space_size[space_name][0]//2 - entrance_width//2,
+                            pos[1] - self.offset_y + space_size[space_name][1],
+                            entrance_width, entrance_height))
+            # 左出入口
+            pygame.draw.rect(screen, self.SILVER,
+                           (pos[0] - self.offset_x - entrance_width,
+                            pos[1] - self.offset_y + space_size[space_name][1]//2 - entrance_height//2,
+                            entrance_width, entrance_height))
+            # 右出入口
+            pygame.draw.rect(screen, self.SILVER,
+                           (pos[0] - self.offset_x + space_size[space_name][0],
+                            pos[1] - self.offset_y + space_size[space_name][1]//2 - entrance_height//2,
+                            entrance_width, entrance_height))
+            
             # 如果是NPC當前空間，顯示特殊標記
             if self.arthur and self.arthur.current_space and self.arthur.current_space.name == space_name:
                 pygame.draw.circle(screen, ORANGE, 
@@ -422,11 +507,11 @@ class Game:
 
     def draw_buttons(self, screen):
         """繪製按鈕"""
-        mouse_pos = pygame.mouse.get_pos()
+        mouse_x, mouse_y = pygame.mouse.get_pos()
         
         for button in self.buttons:
             # 檢查滑鼠是否懸停在按鈕上
-            if button['rect'].collidepoint(mouse_pos) and not button['disabled']:
+            if button['rect'].collidepoint(mouse_x, mouse_y) and not button['disabled']:
                 color = self.button_hover_color
             else:
                 color = self.button_color if not button['disabled'] else self.button_disabled_color
@@ -439,73 +524,12 @@ class Game:
             text_rect = text_surface.get_rect(center=button['rect'].center)
             screen.blit(text_surface, text_rect)
 
-    def handle_events(self):
-        """處理事件"""
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-                return
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if not self.mouse_disabled:
-                    # 獲取滑鼠位置
-                    mouse_x, mouse_y = pygame.mouse.get_pos()
-                    
-                    # 檢查是否點擊了空間
-                    for space_name, pos in space_positions.items():
-                        x, y = pos
-                        width, height = space_size[space_name]
-                        if (x <= mouse_x <= x + width and 
-                            y <= mouse_y <= y + height):
-                            # 找到目標空間
-                            target_space = None
-                            for space in self.world["spaces"].values():
-                                if space.name == space_name:
-                                    target_space = space
-                                    break
-                            
-                            if target_space:
-                                # 指示NPC移動到目標空間
-                                self.target_space = target_space
-                                break
-                    
-                    # 檢查是否點擊了按鈕
-                    for button in self.buttons:
-                        if button['rect'].collidepoint(mouse_x, mouse_y) and not button['disabled']:
-                            # 禁用滑鼠點擊並立即處理輸入
-                            self.mouse_disabled = True
-                            try:
-                                # 執行按鈕對應的動作
-                                button['action']()
-                            except Exception as e:
-                                print(f"執行按鈕動作時出錯: {str(e)}")
-                            break
-            elif event.type == pygame.KEYUP:
-                # 當鍵盤鬆開時重置狀態
-                self.keys_pressed.discard(event.key)
-
-    def process_continue(self):
-        """處理繼續按鈕點擊"""
-        if self.arthur:
-            self.thinking = True
-            self.thinking_result = None
-            
-            # 如果有目標空間，開始移動NPC
-            if self.target_space:
-                # 獲取目標空間的位置
-                target_pos = space_positions.get(self.target_space.name)
-                if target_pos:
-                    self.target_pos = target_pos
-                    self.moving = True
-                    
-            # 創建思考線程
-            self.thinking_thread = threading.Thread(target=self._think_action)
-            self.thinking_thread.daemon = True
-            self.thinking_thread.start()
-
     def _think_action(self):
         """NPC思考線程"""
+        # 禁用滑鼠功能
+        self.mouse_disabled = True
         
-        # 在思考開始時禁用繼續按鈕和滑鼠點擊
+        # 重置繼續按鈕狀態
         for button in self.buttons:
             button['disabled'] = True
         
@@ -520,10 +544,7 @@ class Game:
                 self.mouse_disabled = False
                 self.processing_action = False
                 
-                # 在思考結束時啟用繼續按鈕
-                for button in self.buttons:
-                    button['disabled'] = False
-                
+            
             # 處理NPC思考結果
             if self.arthur.thinking_result:
                 
@@ -588,10 +609,11 @@ class Game:
                 # 重置思考狀態
                 self.thinking = False
                 self.processing_action = False
+                self.mouse_disabled = False
                 
-                # 重置繼續按鈕狀態
-                for button in self.buttons:
-                    button['disabled'] = False
+            # 重置繼續按鈕狀態
+            for button in self.buttons:
+                button['disabled'] = False
             
             # 更新最後動作時間
             self.last_action_time = time.time()
@@ -607,20 +629,18 @@ class Game:
                 for button in self.buttons:
                     button['disabled'] = False
 
-    def print_history(self):
-        """顯示歷史記錄"""
-        if self.arthur:
-            print_history(self.arthur)
-        # 重置滑鼠點擊禁用狀態
-        self.mouse_disabled = False
-    def quit_game(self):
-        """退出遊戲"""
-        self.running = False
-
     def update(self):
         """更新遊戲狀態"""
         if self.arthur:
-            current_time = time.time()
+            current_time = time.time()    
+
+            
+            
+            # 更新歷史記錄顯示
+            if self.show_history:
+                self.update_history_display()
+                
+            # 處理NPC動作...
             
             # 檢查是否需要更新位置
             if current_time - self.last_update_time >= self.update_interval:
@@ -628,14 +648,18 @@ class Game:
                 
                 # 更新NPC位置
                 if self.arthur.current_space or self.arthur.current_item:
+
                     space_pos = space_center.get(self.arthur.current_space.name, (100, 100))
                     self.existing_x = space_pos[0]
-                    self.existing_y = space_pos[1]
-
-                # 處理NPC移動
+                    self.existing_y = space_pos[1]                # 處理NPC移動
                 if self.moving and self.target_pos:
                     current_pos = (self.arthur.x, self.arthur.y)
-                    
+
+                    self.mouse_disabled = True
+                    # 禁用按鈕
+                    for button in self.buttons:
+                        button['disabled'] = True
+
                     # 計算移動方向
                     dx = self.target_pos[0] - current_pos[0]
                     dy = self.target_pos[1] - current_pos[1]
@@ -644,7 +668,6 @@ class Game:
                     distance = (dx**2 + dy**2)**0.5
                     print(f"剩餘距離: {distance}")
                     
-                    # 如果距離很小，直接到達目標
                     if distance < 5:
                         self.arthur.x = self.target_pos[0]
                         self.arthur.y = self.target_pos[1]
@@ -660,21 +683,59 @@ class Game:
                                     break
                             
                             if target_space_obj:
-                                # 更新NPC當前空間
-                                self.arthur.current_space = target_space_obj
-                                print(f"{self.arthur.name} 到達了 {self.target_space}")
+                                # 檢查是否有連接的門
+                                current_space_name = self.arthur.current_space.name
+                                target_space_name = self.target_space
+                                
+                                # 檢查是否通過出入口
+                                entrance_width = 50
+                                entrance_height = 50
+                                
+                                # 檢查上出入口
+                                if (self.arthur.y < space_positions[current_space_name][1] + entrance_height and
+                                    self.arthur.x > space_positions[current_space_name][0] + space_size[current_space_name][0]//2 - entrance_width//2 and
+                                    self.arthur.x < space_positions[current_space_name][0] + space_size[current_space_name][0]//2 + entrance_width//2):
+                                    # 到達上出入口，進入目標空間
+                                    self.arthur.current_space = target_space_obj
+                                    self.arthur.x = space_positions[target_space_name][0] + space_size[target_space_name][0]//2
+                                    self.arthur.y = space_positions[target_space_name][1] + space_size[target_space_name][1] - entrance_height
+                                    print(f"{self.arthur.name} 通過上出入口進入 {self.target_space}")
+                                
+                                # 檢查下出入口
+                                elif (self.arthur.y > space_positions[current_space_name][1] + space_size[current_space_name][1] - entrance_height and
+                                      self.arthur.x > space_positions[current_space_name][0] + space_size[current_space_name][0]//2 - entrance_width//2 and
+                                      self.arthur.x < space_positions[current_space_name][0] + space_size[current_space_name][0]//2 + entrance_width//2):
+                                    # 到達下出入口，進入目標空間
+                                    self.arthur.current_space = target_space_obj
+                                    self.arthur.x = space_positions[target_space_name][0] + space_size[target_space_name][0]//2
+                                    self.arthur.y = space_positions[target_space_name][1] + entrance_height
+                                    print(f"{self.arthur.name} 通過下出入口進入 {self.target_space}")
+                                
+                                # 檢查左出入口
+                                elif (self.arthur.x < space_positions[current_space_name][0] + entrance_width and
+                                      self.arthur.y > space_positions[current_space_name][1] + space_size[current_space_name][1]//2 - entrance_height//2 and
+                                      self.arthur.y < space_positions[current_space_name][1] + space_size[current_space_name][1]//2 + entrance_height//2):
+                                    # 到達左出入口，進入目標空間
+                                    self.arthur.current_space = target_space_obj
+                                    self.arthur.x = space_positions[target_space_name][0] + space_size[target_space_name][0] - entrance_width
+                                    self.arthur.y = space_positions[target_space_name][1] + space_size[target_space_name][1]//2
+                                    print(f"{self.arthur.name} 通過左出入口進入 {self.target_space}")
+                                
+                                # 檢查右出入口
+                                elif (self.arthur.x > space_positions[current_space_name][0] + space_size[current_space_name][0] - entrance_width and
+                                      self.arthur.y > space_positions[current_space_name][1] + space_size[current_space_name][1]//2 - entrance_height//2 and
+                                      self.arthur.y < space_positions[current_space_name][1] + space_size[current_space_name][1]//2 + entrance_height//2):
+                                    # 到達右出入口，進入目標空間
+                                    self.arthur.current_space = target_space_obj
+                                    self.arthur.x = space_positions[target_space_name][0] + entrance_width
+                                    self.arthur.y = space_positions[target_space_name][1] + space_size[target_space_name][1]//2
+                                    print(f"{self.arthur.name} 通過右出入口進入 {self.target_space}")
                                 
                                 # 更新歷史記錄
                                 self.arthur.history.append({
                                     "role": "system",
                                     "content": f"到達了 {self.target_space}"
                                 })
-                                
-                                # 確保NPC在空間中心
-                                if self.target_space in space_center:
-                                    center_x, center_y = space_center[self.target_space]
-                                    self.arthur.x = center_x
-                                    self.arthur.y = center_y
                         
                         # 如果有目標物品，更新NPC當前物品
                         if self.target_item:
@@ -691,16 +752,23 @@ class Game:
                                     break
                             
                             if target_item_obj:
+                                # 更新NPC當前物品
                                 self.arthur.current_item = target_item_obj
-                                print(f"NPC到達了物品 {self.target_item}")
+                                print(f"{self.arthur.name} 到達了 {self.target_item}")
                                 
                                 # 更新歷史記錄
                                 self.arthur.history.append({
                                     "role": "system",
-                                    "content": f"到達了物品 {self.target_item}"
+                                    "content": f"到達了 {self.target_item}"
                                 })
+                                
+                                # 確保NPC在物品附近
+                                if self.target_item in item_positions:
+                                    item_x, item_y = item_positions[self.target_item]
+                                    self.arthur.x = item_x
+                                    self.arthur.y = item_y
                         
-                        # 重置所有狀態
+                        # 移動完成，重置狀態
                         self.moving = False
                         self.target_pos = None
                         self.target_space = None
@@ -709,65 +777,188 @@ class Game:
                         # 重置思考狀態
                         self.thinking = False
                         self.processing_action = False
+                        self.mouse_disabled = False
                         
-                        # 重置繼續按鈕狀態
+                        # 啟用按鈕
                         for button in self.buttons:
                             button['disabled'] = False
                     else:
-                        # 根據方向移動
-                        self.arthur.x += dx * (self.move_speed / distance)
-                        self.arthur.y += dy * (self.move_speed / distance)
-                        print(f"移動到新位置: ({self.arthur.x}, {self.arthur.y})")
+                        # 計算單位向量
+                        unit_dx = dx / distance
+                        unit_dy = dy / distance
                         
-                        # 在移動中禁用按鈕
-                        for button in self.buttons:
-                            button['disabled'] = True
+                        # 計算新的位置
+                        new_x = self.arthur.x + unit_dx * self.move_speed
+                        new_y = self.arthur.y + unit_dy * self.move_speed
+                        
+                        # 檢查是否超出空間邊界
+                        space_name = self.arthur.current_space.name
+                        if space_name in space_positions and space_name in space_size:
+                            pos = space_positions[space_name]
+                            size = space_size[space_name]
+                            
+                            # 設置邊界緩衝區
+                            buffer = 5
+                            
+                            # 確定出入口位置
+                            entrance_width = 50
+                            entrance_height = 50
+                            
+                            # 檢查是否在出入口範圍內
+                            in_entrance = (
+                                # 上出入口
+                                (new_y < pos[1] + entrance_height and
+                                 new_x > pos[0] + size[0]//2 - entrance_width//2 and
+                                 new_x < pos[0] + size[0]//2 + entrance_width//2) or
+                                # 下出入口
+                                (new_y > pos[1] + size[1] - entrance_height and
+                                 new_x > pos[0] + size[0]//2 - entrance_width//2 and
+                                 new_x < pos[0] + size[0]//2 + entrance_width//2) or
+                                # 左出入口
+                                (new_x < pos[0] + entrance_width and
+                                 new_y > pos[1] + size[1]//2 - entrance_height//2 and
+                                 new_y < pos[1] + size[1]//2 + entrance_height//2) or
+                                # 右出入口
+                                (new_x > pos[0] + size[0] - entrance_width and
+                                 new_y > pos[1] + size[1]//2 - entrance_height//2 and
+                                 new_y < pos[1] + size[1]//2 + entrance_height//2)
+                            )
+                            
+                            # 檢查是否超出邊界
+                            if (new_x < pos[0] + buffer or
+                                new_x > pos[0] + size[0] - buffer or
+                                new_y < pos[1] + buffer or
+                                new_y > pos[1] + size[1] - buffer) and not in_entrance:
+                                # 如果超出邊界且不在出入口範圍內，停止移動
+                                self.moving = False
+                                self.target_pos = None
+                                self.target_space = None
+                                self.target_item = None
+                                self.mouse_disabled = False
+                                print(f"NPC撞到牆壁了！")
+                                
+                                # 啟用按鈕
+                                for button in self.buttons:
+                                    button['disabled'] = False
+                                    
+                                # 重置思考狀態
+                                self.thinking = False
+                                self.processing_action = False
+                                self.mouse_disabled = False
+                            else:
+                                # 否則更新NPC位置
+                                self.arthur.x = int(new_x)
+                                self.arthur.y = int(new_y)
+                                print(f"移動到新位置: ({self.arthur.x}, {self.arthur.y})")
+                                
+                                # 在移動中禁用按鈕
+                                for button in self.buttons:
+                                    button['disabled'] = True
 
-    def handle_events(self):
-        """處理遊戲事件"""
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if not self.mouse_disabled:
-                    # 獲取滑鼠位置
-                    mouse_x, mouse_y = pygame.mouse.get_pos()
-                    
-                    # 檢查是否點擊了按鈕
-                    for button in self.buttons:
-                        if button['rect'].collidepoint(mouse_x, mouse_y) and not button['disabled']:
-                            # 禁用滑鼠點擊並立即處理輸入
-                            self.mouse_disabled = True
-                            try:
-                                # 執行按鈕對應的動作
-                                button['action']()
-                            except Exception as e:
-                                print(f"執行按鈕動作時出錯: {str(e)}")
-                            break
+            # 更新思考狀態
+            if self.thinking:
+                self.processing_action = True
+                self.mouse_disabled = True
+                
+                # 啟用按鈕
+                for button in self.buttons:
+                    button['disabled'] = True
+            
+
+    def update_history_display(self):
+        """更新歷史記錄顯示"""
+        if not self.arthur:
+            return
+            
+        # 獲取歷史記錄
+        history = self.arthur.history  # 只顯示最近10條記錄
+        self.history_lines = []
+        
+        # 設置每行文字的最大寬度
+        max_width = min(self.history_max_line_width, self.history_rect.width)  # 取較小值
+        
+        for item in history:
+            role = item["role"]
+            content = item["content"]
+            
+            if role == "system":
+                text = f"[系統] {content}"
+            elif role == "user":
+                text = f"[用戶] {content}"
+            else:
+                text = f"[NPC] {content}"
+            
+            # 處理特殊字元
+            lines = []
+            current_line = ""
+            
+            # 先按\n分割
+            paragraphs = text.split('\n')
+            for paragraph in paragraphs:
+                # 對每個段落進行換行處理
+                current_line = ""
+                for char in paragraph:
+                    # 測試下一個字是否會超出寬度
+                    test_line = current_line + char
+                    if self.history_font.size(test_line)[0] <= max_width:
+                        current_line = test_line
+                    else:
+                        lines.append(current_line)
+                        current_line = char
+                if current_line:  # 添加最後一行
+                    lines.append(current_line)
+                    current_line = ""
+            
+            # 將處理後的行加入歷史記錄
+            self.history_lines.extend(lines)
+
+        # 如果歷史記錄顯示區不存在，創建它
+        if not self.history_surface:
+            self.history_surface = pygame.Surface((self.history_rect.width, self.history_rect.height))
+            self.history_surface.fill((255, 255, 255))
+
+        # 清除歷史記錄顯示區
+        self.history_surface.fill((255, 255, 255))
+        
+        # 繪製歷史記錄
+        y = 20  # 從標題下方開始
+        max_visible_lines = self.history_rect.height // 20 # 每行20像素
+        total_lines = len(self.history_lines)
+        
+        # 計算需要顯示的行數範圍
+        start_line = self.history_scroll
+        end_line = min(start_line + max_visible_lines, total_lines)
+        
+        for i in range(start_line, end_line):
+            line = self.history_lines[i]
+            text_surface = self.history_font.render(line, True, (0, 0, 0))
+            self.history_surface.blit(text_surface, (10, y))
+            y += 20  # 每行之間的間距
 
     def draw(self):
-        """繪製遊戲"""
-        # 繪製背景
-        self.screen.fill(WHITE)
+        """繪製遊戲畫面"""
+        screen.fill(WHITE)
+        
+        # 繪製遊戲內容...
         
         # 繪製所有空間
-        self.draw_spaces(self.screen)
+        self.draw_spaces(screen)
         
         # 繪製NPC
         if self.arthur:
             # 繪製NPC
-            pygame.draw.circle(self.screen, BLUE, (int(self.arthur.x), int(self.arthur.y)), 10)
+            pygame.draw.circle(screen, BLUE, (int(self.arthur.x), int(self.arthur.y)), 10)
             
             # 繪製NPC名稱
             text = font.render(self.arthur.name, True, BLACK)
-            self.screen.blit(text, (self.arthur.x - text.get_width()//2, self.arthur.y - 20))
+            screen.blit(text, (self.arthur.x - text.get_width()//2, self.arthur.y - 20))
             
             # 如果NPC在思考，顯示思考提示
             if self.arthur.thinking:
                 # 獲取思考文本
                 thinking_text = "NPC正在思考中..."
                 
-                # 計算文本寬度和高度
+                # 測量文本寬度
                 text_surface = self.font_large.render(thinking_text, True, BLACK)
                 text_width = text_surface.get_width()
                 text_height = text_surface.get_height()
@@ -780,18 +971,18 @@ class Game:
                 bubble_y = self.arthur.y - 40 - bubble_height
                 
                 # 繪製聊天氣泡背景
-                pygame.draw.rect(self.screen, (255, 255, 200), 
+                pygame.draw.rect(screen, (255, 255, 200), 
                               (bubble_x, bubble_y, bubble_width, bubble_height),
                               border_radius=10)
                 
                 # 繪製邊框
-                pygame.draw.rect(self.screen, BLACK, 
+                pygame.draw.rect(screen, BLACK, 
                               (bubble_x, bubble_y, bubble_width, bubble_height),
                               width=2,
                               border_radius=10)
                 
                 # 繪製思考文本
-                self.screen.blit(text_surface, 
+                screen.blit(text_surface, 
                               (bubble_x + bubble_padding, bubble_y + bubble_padding))
             
             # 如果有思考結果，顯示思考結果
@@ -799,7 +990,7 @@ class Game:
                     # 獲取思考結果文本
                     result_text = self.arthur.thinking_result
                     
-                    # 計算文本寬度和高度
+                    # 測量文本寬度和高度
                     text_surface = font.render(result_text, True, BLACK)
                     text_width = text_surface.get_width()
                     text_height = text_surface.get_height()
@@ -812,18 +1003,18 @@ class Game:
                     bubble_y = self.arthur.y - 20 - bubble_height
                     
                     # 繪製聊天氣泡背景
-                    pygame.draw.rect(self.screen, (255, 255, 200), 
+                    pygame.draw.rect(screen, (255, 255, 200), 
                                   (bubble_x, bubble_y, bubble_width, bubble_height),
                                   border_radius=10)
                     
                     # 繪製邊框
-                    pygame.draw.rect(self.screen, BLACK, 
+                    pygame.draw.rect(screen, BLACK, 
                                   (bubble_x, bubble_y, bubble_width, bubble_height),
                                   width=2,
                                   border_radius=10)
                     
                     # 繪製思考結果文本
-                    self.screen.blit(text_surface, 
+                    screen.blit(text_surface, 
                                   (bubble_x + bubble_padding, bubble_y + bubble_padding))
         
         # 繪製物品
@@ -853,47 +1044,127 @@ class Game:
                     item_type = getattr(item, "type", "unknown")
                     
                     if item_id == "book":
-                        pygame.draw.rect(self.screen, BROWN, 
+                        pygame.draw.rect(screen, BROWN, 
                                       (screen_x - 20, screen_y - 30, 40, 60),
                                       border_radius=5)
-                        pygame.draw.rect(self.screen, WHITE, 
+                        pygame.draw.rect(screen, WHITE, 
                                       (screen_x - 18, screen_y - 28, 36, 56),
                                       border_radius=5)
                     elif item_id == "remote":
-                        pygame.draw.rect(self.screen, GRAY, 
+                        pygame.draw.rect(screen, GRAY, 
                                       (screen_x - 20, screen_y - 30, 40, 60),
                                       border_radius=10)
-                        pygame.draw.circle(self.screen, DARK_GRAY, 
+                        pygame.draw.circle(screen, DARK_GRAY, 
                                       (screen_x, screen_y - 15), 5)
-                        pygame.draw.circle(self.screen, DARK_GRAY, 
+                        pygame.draw.circle(screen, DARK_GRAY, 
                                       (screen_x + 10, screen_y - 15), 5)
                     elif item_id == "apple":
-                        pygame.draw.circle(self.screen, RED, (screen_x, screen_y), 15)
-                        pygame.draw.line(self.screen, BROWN, 
+                        pygame.draw.circle(screen, RED, (screen_x, screen_y), 15)
+                        pygame.draw.line(screen, BROWN, 
                                       (screen_x + 3, screen_y - 15),
                                       (screen_x + 3, screen_y - 30), 3)
                     elif item_id == "knife":
-                        pygame.draw.polygon(self.screen, SILVER, 
+                        pygame.draw.polygon(screen, SILVER, 
                                       [(screen_x - 10, screen_y),
                                        (screen_x + 10, screen_y),
                                        (screen_x + 10, screen_y - 20),
                                        (screen_x - 10, screen_y - 20)])
-                        pygame.draw.rect(self.screen, BROWN, 
+                        pygame.draw.rect(screen, BROWN, 
                                       (screen_x - 5, screen_y - 20, 10, 30))
                     
                     # 繪製物品名稱
                     text = self.font_small.render(name, True, BLACK)
-                    self.screen.blit(text, (screen_x - text.get_width()//2, screen_y + 30))
+                    screen.blit(text, (screen_x - text.get_width()//2, screen_y + 30))
                 else:
                     print(f"物品不在屏幕範圍內: {name} - ({screen_x}, {screen_y})")  # 調試信息
         
-        # 最後繪製按鈕，確保顯示在最上層
-        self.draw_buttons(self.screen)
+        # 繪製歷史記錄顯示區
+        if self.show_history and self.history_surface:
+            pygame.draw.rect(screen, (200, 200, 200), self.history_rect, 2)  # 繪製邊框
+            screen.blit(self.history_surface, self.history_rect.topleft)
+        
+        # 繪製按鈕
+        self.draw_buttons(screen)
+        
+        # 如果顯示歷史記錄，更新並繪製歷史記錄
+        if self.show_history:
+            self.update_history_display()
+            screen.blit(self.history_surface, self.history_rect)
+
+    def handle_events(self):
+        """處理遊戲事件"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if not self.mouse_disabled:
+                    # 獲取滑鼠位置
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+                    
+                    # 檢查是否點擊了按鈕
+                    for button in self.buttons:
+                        if button['rect'].collidepoint(mouse_x, mouse_y):
+                            try:
+                                # 執行按鈕對應的動作
+                                button['action']()
+                            except Exception as e:
+                                print(f"執行按鈕動作時出錯: {str(e)}")
+                            break
+            elif event.type == pygame.MOUSEWHEEL:
+                # 處理滑鼠滾輪事件
+                if self.show_history:
+                    # 向上滾動時減小滾動位置（向上滾動）
+                    if event.y > 0:
+                        self.history_scroll = max(0, self.history_scroll - self.history_scroll_speed)
+                    # 向下滾動時增加滾動位置（向下滾動）
+                    elif event.y < 0:
+                        # 計算需要顯示的行數
+                        max_visible_lines = self.history_rect.height // 20
+                        total_lines = len(self.history_lines)
+                        if total_lines > max_visible_lines:
+                            max_scroll = total_lines - max_visible_lines
+                            self.history_scroll = min(max_scroll, self.history_scroll + self.history_scroll_speed)
+            elif event.type == pygame.KEYDOWN:
+                self.keys_pressed.add(event.key)
+            elif event.type == pygame.KEYUP:
+                self.keys_pressed.discard(event.key)
+    def process_continue(self):
+        """處理繼續按鈕點擊"""
+        if self.arthur:
+            # 禁用所有按鈕
+            for button in self.buttons:
+                button['disabled'] = True
+            
+            # 禁用滑鼠功能
+            self.mouse_disabled = True
+            self.thinking = True
+            self.thinking_result = None
+
+            # 如果有目標空間，開始移動NPC
+            if self.target_space:
+                # 獲取目標空間的位置
+                target_pos = space_positions.get(self.target_space)
+                if target_pos:
+                    self.target_pos = target_pos
+                    self.moving = True
+                    
+            # 創建思考線程
+            self.thinking_thread = threading.Thread(target=self._think_action)
+            self.thinking_thread.daemon = True
+            self.thinking_thread.start()
+
+    def print_history(self):
+        """切換歷史記錄顯示"""
+        self.show_history = not self.show_history
+
+    def quit_game(self):
+        """退出遊戲"""
+        self.running = False
 
     def run(self):
         """運行遊戲主循環"""
         pygame.init()
-        self.screen = pygame.display.set_mode((1200, 800))
+        self.screen = pygame.display.set_mode((1500, 800))
         pygame.display.set_caption("AI NPC 遊戲")
         clock = pygame.time.Clock()
         

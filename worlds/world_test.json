@@ -131,14 +131,14 @@
             "name": "冰箱",
             "description": "一個冰箱",
             "type": "refrigerator",
-            "position": [234, 766],
+            "position": [234, 666],
             "interactions": [
                 {
                     "name": "存入",
                     "params": null
                 },
                 {
-                    "name": "拿取",
+                    "name": "開啟",
                     "params": null
                 }
             ]
@@ -182,7 +182,7 @@
             "name": "日記",
             "description": "一本私人日記",
             "type": "diary",
-            "position": [123, 456],
+            "position": [790, 123],
             "content": "今天是個美好的一天...",
             "interactions": [
                 {
@@ -206,7 +206,7 @@
             "name": "筆",
             "description": "一支黑色的圓珠筆",
             "type": "pen",
-            "position": [234, 567],
+            "position": [567, 234],
             "interactions": [
                 {
                     "name": "使用",
