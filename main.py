@@ -11,6 +11,130 @@ original_caption = "AI NPC Simulation System"  # 更改為英文標題
 pygame.init()
 pygame.font.init()  # 初始化字體模組
 
+# 在 pygame.init() 之後、主循環之前新增以下函數
+def show_map_selection():
+    map_selection_running = True
+    map_screen = pygame.display.set_mode((600, 400))
+    pygame.display.set_caption("Map Selection")
+
+    # 確定地圖資料夾路徑
+    maps_dir = os.path.join(os.path.dirname(__file__), "worlds", "maps")
+    default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "map.json")
+
+    # 創建資料夾如果不存在
+    if not os.path.exists(maps_dir):
+        os.makedirs(maps_dir)
+        # 如果是新創建的資料夾，把預設地圖複製進去作為第一個選項
+        if os.path.exists(default_map_path):
+            import shutil
+            shutil.copy(default_map_path, os.path.join(maps_dir, "default_map.json"))
+
+    # 獲取所有可用地圖
+    available_maps = [f for f in os.listdir(maps_dir) if f.endswith('.json')]
+    # 加入預設地圖選項
+    if os.path.exists(default_map_path):
+        available_maps.insert(0, "Default Map")
+
+    # 如果沒有找到地圖文件
+    if not available_maps:
+        font = pygame.font.SysFont("arial", 20, bold=True)
+        map_screen.fill(white)
+        text = font.render("No maps found. Using default map.", True, (255, 0, 0))
+        map_screen.blit(text, (150, 180))
+        pygame.display.flip()
+        pygame.time.wait(2000)  # 等待2秒
+        return default_map_path
+
+    # 計算按鈕位置與大小
+    button_width = 400
+    button_height = 50
+    button_margin = 10
+    button_start_y = 50
+
+    # 定義返回按鈕
+    back_button_rect = pygame.Rect(250, 350, 100, 40)
+
+    # 建立地圖按鈕列表
+    map_buttons = []
+    for i, map_name in enumerate(available_maps):
+        map_buttons.append({
+            'name': map_name,
+            'rect': pygame.Rect(100, button_start_y + i * (button_height + button_margin), button_width, button_height),
+            'hover': False
+        })
+
+    selected_map_path = default_map_path  # 預設值
+
+    while map_selection_running:
+        map_screen.fill(white)
+
+        # 標題
+        title_font = pygame.font.SysFont("arial", 32, bold=True)
+        title = title_font.render("Select a Map", True, black)
+        title_rect = title.get_rect(center=(300, 25))
+        map_screen.blit(title, title_rect)
+
+        # 滑鼠位置
+        mouse_pos = pygame.mouse.get_pos()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return default_map_path  # 如果關閉視窗，使用預設地圖
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # 檢查是否點擊了地圖按鈕
+                for button in map_buttons:
+                    if button['rect'].collidepoint(mouse_pos):
+                        if button['name'] == "Default Map":
+                            selected_map_path = default_map_path
+                        else:
+                            selected_map_path = os.path.join(maps_dir, button['name'])
+                        map_selection_running = False
+                        break
+
+                # 檢查是否點擊了返回按鈕
+                if back_button_rect.collidepoint(mouse_pos):
+                    return default_map_path  # 返回按鈕使用預設地圖
+
+        # 繪製地圖按鈕
+        for button in map_buttons:
+            # 檢查懸停狀態
+            button['hover'] = button['rect'].collidepoint(mouse_pos)
+
+            # 按鈕顏色
+            if button['hover']:
+                color = (100, 150, 255)  # 懸停時顏色
+            else:
+                color = (150, 200, 255)  # 正常顏色
+
+            # 繪製按鈕
+            pygame.draw.rect(map_screen, color, button['rect'], border_radius=10)
+            pygame.draw.rect(map_screen, black, button['rect'], width=2, border_radius=10)  # 邊框
+
+            # 按鈕文字
+            button_font = pygame.font.SysFont("arial", 20)
+            display_name = button['name'].replace('.json', '').replace('_', ' ').title()
+            text = button_font.render(display_name, True, black)
+            text_rect = text.get_rect(center=button['rect'].center)
+            map_screen.blit(text, text_rect)
+
+        # 繪製返回按鈕
+        back_color = (200, 200, 0) if back_button_rect.collidepoint(mouse_pos) else (150, 150, 0)
+        pygame.draw.rect(map_screen, back_color, back_button_rect, border_radius=10)
+        pygame.draw.rect(map_screen, black, back_button_rect, width=2, border_radius=10)
+        back_font = pygame.font.SysFont("arial", 20, bold=True)
+        back_text = back_font.render("Cancel", True, black)
+        back_text_rect = back_text.get_rect(center=back_button_rect.center)
+        map_screen.blit(back_text, back_text_rect)
+
+        pygame.display.flip()
+
+    # 重新設定主視窗
+    screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
+    pygame.display.set_caption(original_caption)
+
+    return selected_map_path
+
 # 使用可調整大小的視窗
 window_size = [1500, 800]  # 初始視窗大小
 screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
@@ -39,19 +163,29 @@ def check_input_method():
         print(f"Error checking input method: {e}")
 
 # 從 map.json 載入空間資料
-map_path = os.path.join(os.path.dirname(__file__), "map.json")  # 指定 map.json 路徑
+default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "maps", "map.json")
 
-# 檢查 map.json 文件是否存在
-if not os.path.exists(map_path):
-    raise FileNotFoundError(f"找不到 map.json 文件，請確保文件位於: {map_path}")
+# 顯示地圖選擇介面，獲取選擇的地圖路徑
+selected_map_path = show_map_selection()
 
-# 改進 JSON 文件的讀取與檢查
+# 檢查選擇的地圖文件是否存在
+if not os.path.exists(selected_map_path):
+    print(f"找不到地圖文件: {selected_map_path}，使用默認地圖")
+    selected_map_path = default_map_path
+
+# 如果默認地圖也不存在，拋出錯誤
+if not os.path.exists(selected_map_path):
+    raise FileNotFoundError(f"找不到地圖文件，請確保地圖文件存在: {selected_map_path}")
+
+# 顯示使用的地圖路徑
+print(f"使用地圖: {selected_map_path}")
+
 try:
-    with open(map_path, "r", encoding="utf-8") as f:
+    with open(selected_map_path, "r", encoding="utf-8") as f:
         raw_data = f.read()
         map_data = json.loads(raw_data)
 except (FileNotFoundError, json.JSONDecodeError) as e:
-    raise RuntimeError(f"無法讀取或解析 map.json 文件: {e}")
+    raise RuntimeError(f"無法讀取或解析地圖文件: {e}")
 
 # 檢查 map.json 是否包含 space_positions、space_size 和 space_colors 鍵
 if "space_positions" not in map_data or "space_size" not in map_data or "space_colors" not in map_data:
@@ -75,7 +209,7 @@ brown = (165, 42, 42)
 blue = (0, 0, 255)  # 新增藍色，用於門的顏色
 
 # 從 item.json 載入物品資料
-item_path = os.path.join(os.path.dirname(__file__), "item.json")  # 指定 item.json 路徑
+item_path = os.path.join(os.path.dirname(__file__), "worlds", "item.json")  # 指定 item.json 路徑
 with open(item_path, "r", encoding="utf-8") as f:
     item_data = json.load(f)
 

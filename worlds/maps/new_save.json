@@ -1,0 +1,32 @@
+{
+  "world_name": "測試世界",
+  "description": "這是一個測試世界",
+  "spaces": [
+    {
+      "name": "起始房間",
+      "description": "一個簡單的房間",
+      "connected_spaces": [],
+      "items": [
+        "書"
+      ]
+    }
+  ],
+  "items": [
+    {
+      "name": "書",
+      "description": "一本內容豐富的書",
+      "properties": {}
+    }
+  ],
+  "npcs": [
+    {
+      "name": "測試角色",
+      "description": "一個用於測試的角色",
+      "current_space": "起始房間",
+      "inventory": {
+        "items": [],
+        "capacity": 10
+      }
+    }
+  ]
+}
