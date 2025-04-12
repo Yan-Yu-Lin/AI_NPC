@@ -4,6 +4,9 @@ import sys
 import json
 import os  # 新增 os 模組
 import datetime  # 用於記錄互動時間
+from npc_manager import NPCManager
+
+npc_manager = NPCManager("npc.json")
 
 original_caption = "AI NPC Simulation System"  # 更改為英文標題
 
@@ -191,14 +194,14 @@ except (FileNotFoundError, json.JSONDecodeError) as e:
 if "space_positions" not in map_data or "space_size" not in map_data or "space_colors" not in map_data:
     raise KeyError("map.json 文件中缺少 'space_positions'、'space_size' 或 'space_colors' 鍵，請檢查文件內容是否正確。")
 
-space_positions = {name: tuple(pos) for name, pos in map_data["space_positions"].items()}
-space_size = {name: tuple(size) for name, size in map_data["space_size"].items()}
-space_colors = {name: tuple(color) for name, color in map_data["space_colors"].items()}
+space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
+space_size = {name: list(size) for name, size in map_data["space_size"].items()}
+space_colors = {name: list(color) for name, color in map_data["space_colors"].items()}
 
 # 從 map.json 載入門的資料
 doors = {name: data for name, data in map_data["space_positions"].items() if "door_" in name}
 door_sizes = {
-    name: tuple(map_data["space_size"][data["direction"]]) for name, data in doors.items()
+    name: list(map_data["space_size"][data["direction"]]) for name, data in doors.items()
 }
 
 # 顏色
@@ -213,7 +216,7 @@ item_path = os.path.join(os.path.dirname(__file__), "worlds", "item.json")  # �
 with open(item_path, "r", encoding="utf-8") as f:
     item_data = json.load(f)
 
-item_positions = {name: tuple(info["position"]) for name, info in item_data["items"].items()}
+item_positions = {name: list(info["position"]) for name, info in item_data["items"].items()}
 
 # 處理 $shared_properties 的引用
 def resolve_shared_properties(value, shared_properties):
@@ -242,7 +245,7 @@ def draw_spaces(screen):
         color = resolve_shared_properties(raw_color, shared_properties)
 
         # 解決空間大小的共享屬性引用
-        raw_size = space_size.get(space_name, (0, 0))
+        raw_size = space_size.get(space_name, [0, 0])
         size = resolve_shared_properties(raw_size, shared_properties)
 
         pygame.draw.rect(screen, color, (*pos, *size))
@@ -297,14 +300,14 @@ def draw_doors(screen):
     doors_data = map_data.get("doors", {})  # 使用 .get() 確保鍵存在
     for door_name, door_data in map_data["doors"].items():
         # 解析門的位置e, door_data in doors_data.items():
-        door_pos = tuple(door_data.get("position", (0, 0)))
+        door_pos = list(door_data.get("position", [0, 0]))
         # 解析門的大小 = tuple(door_data.get("position", (0, 0)))
         raw_size = resolve_shared_properties(door_data.get("direction", []), shared_properties)
-        door_size = tuple(raw_size) if isinstance(raw_size, list) and len(raw_size) == 2 else (0, 0)
+        door_size = list(raw_size) if isinstance(raw_size, list) and len(raw_size) == 2 else [0, 0]
         # 解析門的顏色e = tuple(raw_size) if isinstance(raw_size, list) and len(raw_size) == 2 else (0, 0)
         raw_color = resolve_shared_properties(door_data.get("color", blue), shared_properties)
-        door_color = tuple(raw_color) if isinstance(raw_color, list) and len(raw_color) == 3 else blue
-        door_color = tuple(raw_color) if isinstance(raw_color, list) and len(raw_color) == 3 else blue
+        door_color = list(raw_color) if isinstance(raw_color, list) and len(raw_color) == 3 else blue
+        door_color = list(raw_color) if isinstance(raw_color, list) and len(raw_color) == 3 else blue
         # 繪製門
         if len(door_pos) == 2 and len(door_size) == 2:  # 確保位置和大小有效
             pygame.draw.rect(screen, door_color, (*door_pos, *door_size))
@@ -340,7 +343,7 @@ def draw_walls(screen):
 
     # 繪製每個區域的牆壁
     for space_name, pos in space_positions.items():
-        size = space_size.get(space_name, (0, 0))
+        size = space_size.get(space_name, [0, 0])
         if not size or len(size) != 2:  # 檢查 size 是否有效
             continue
 
@@ -393,6 +396,7 @@ def draw_walls(screen):
 def draw_npc(screen, npc_pos):
     pygame.draw.circle(screen, brown, npc_pos, 15)
     font = pygame.font.SysFont("arial", 24)  # Use a font that supports English
+    npc_manager.draw_all(screen)
     if not font:  # If font loading fails, use the default font
         font = pygame.font.SysFont(None, 24)
     text = font.render("NPC", True, black)  # NPC label
@@ -401,7 +405,7 @@ def draw_npc(screen, npc_pos):
     # 判斷 NPC 所在的空間
     current_space = "Unknown"
     for space_name, pos in space_positions.items():
-        size = space_size.get(space_name, (0, 0))
+        size = space_size.get(space_name, [0, 0])
         if pos[0] <= npc_pos[0] <= pos[0] + size[0] and pos[1] <= npc_pos[1] <= pos[1] + size[1]:
             current_space = space_name
             break
@@ -657,23 +661,28 @@ while running:
                     running = False
                 elif record_button_rect.collidepoint(event.pos):  # 檢查是否點擊了紀錄按鈕
                     show_interaction_history()
+                elif event.button == 1:
+                    npc_manager.handle_click(event.pos)
             elif event.type == pygame.VIDEORESIZE:  # 處理視窗大小調整事件
                 window_size = [event.w, event.h]
                 screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
                 button_rect = pygame.Rect(window_size[0] - 110, window_size[1] - 50, 100, 40)  # 更新退出按鈕位置
                 record_button_rect = pygame.Rect(window_size[0] - 220, window_size[1] - 50, 100, 40)  # 更新紀錄按鈕位置
 
+
         # 處理鍵盤輸入
         keys = pygame.key.get_pressed()
-        new_pos = npc_pos[:]  # 複製當前位置
-        if keys[pygame.K_w]:  # 按下 W 鍵向上移動
-            new_pos[1] -= npc_speed
-        if keys[pygame.K_s]:  # 按下 S 鍵向下移動
-            new_pos[1] += npc_speed
-        if keys[pygame.K_a]:  # 按下 A 鍵向左移動
-            new_pos[0] -= npc_speed
-        if keys[pygame.K_d]:  # 按下 D 鍵向右移動
-            new_pos[0] += npc_speed
+        if npc_manager.selected_npc:  # 確保有選中的 NPC
+            # 確保位置是列表
+            new_pos = list(npc_manager.selected_npc.position)
+            if keys[pygame.K_w]:  # 按下 W 鍵向上移動
+                new_pos[1] -= npc_speed
+            if keys[pygame.K_s]:  # 按下 S 鍵向下移動
+                new_pos[1] += npc_speed
+            if keys[pygame.K_a]:  # 按下 A 鍵向左移動
+                new_pos[0] -= npc_speed
+            if keys[pygame.K_d]:  # 按下 D 鍵向右移動
+                new_pos[0] += npc_speed
 
         # 用背景色填滿螢幕
         screen.fill(white)
@@ -685,17 +694,18 @@ while running:
         draw_items(screen)
 
         # 檢查牆壁碰撞
-        npc_rect = pygame.Rect(new_pos[0] - 15, new_pos[1] - 15, 30, 30)  # NPC 的矩形
-        if not check_wall_collision(npc_rect, wall_segments):
-            npc_pos = new_pos  # 更新 NPC 位置
+        if npc_manager.selected_npc:
+            npc_rect = pygame.Rect(new_pos[0] - 15, new_pos[1] - 15, 30, 30)  # NPC 的矩形
+            if not check_wall_collision(npc_rect, wall_segments):
+                npc_manager.move_selected_npc(new_pos)  # 更新 NPC 位置
 
-        draw_npc(screen, npc_pos)
+        npc_manager.draw_all(screen)
 
         # 更新互動歷史（檢測空間變更）
         previous_space = current_space
         current_space = "Unknown"
         for space_name, pos in space_positions.items():
-            size = space_size.get(space_name, (0, 0))
+            size = space_size.get(space_name, [0, 0])
             if pos[0] <= npc_pos[0] <= pos[0] + size[0] and pos[1] <= npc_pos[1] <= pos[1] + size[1]:
                 current_space = space_name
                 break

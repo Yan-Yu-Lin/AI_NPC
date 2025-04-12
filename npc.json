@@ -1,0 +1,22 @@
+{
+    "npcs": {
+        "npc1": {
+            "name": "NPC",
+            "position": [150, 150],
+            "color": [165, 42, 42],
+            "radius": 15
+        },
+        "npc2": {
+            "name": "NPC2",
+            "position": [300, 300],
+            "color": [0, 128, 0],
+            "radius": 20
+        },
+        "npc3": {
+            "name": "NPC3",
+            "position": [300, 300],
+            "color": [255, 128, 0],
+            "radius": 20
+        }
+    }
+}
