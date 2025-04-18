@@ -5,8 +5,27 @@ import json
 import os  # 新增 os 模組
 import datetime  # 用於記錄互動時間
 from npc_manager import NPCManager
+from AI_thinking import AIThinking
+import threading
 
+thinking_lock = threading.Lock()
 npc_manager = NPCManager("npc.json")
+
+# 先讀取地圖檔案並解析空間資訊
+# （這段必須在 AIThinking 初始化前）
+default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "maps", "map.json")
+with open(default_map_path, "r", encoding="utf-8") as f:
+    map_data = json.load(f)
+space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
+space_size = {name: list(size) for name, size in map_data["space_size"].items()}
+
+# 再初始化 AIThinking
+ai_thinking = AIThinking(
+    npc_manager.selected_npc, 
+    buttons=None, 
+    thinking_lock=thinking_lock, 
+    space_positions=space_positions, 
+    space_size=space_size)
 
 original_caption = "AI NPC Simulation System"  # 更改為英文標題
 
@@ -470,6 +489,23 @@ record_button_hover_color = (0, 255, 0)  # 更亮的綠色
 record_button_text_color = white
 record_button_rect = pygame.Rect(window_size[0] - 220, window_size[1] - 50, 100, 40)  # 紀錄按鈕位置與大小（退出按鈕左側）
 
+# 定義繼續按鈕的屬性
+continue_button_color = (0, 120, 255)  # 藍色
+continue_button_hover_color = (0, 180, 255)  # 更亮的藍色
+continue_button_text_color = white
+continue_button_rect = pygame.Rect(window_size[0] - 330, window_size[1] - 50, 100, 40)  # 繼續按鈕位置與大小（紀錄按鈕左側）
+
+# 繪製繼續按鈕
+def draw_continue_button(screen):
+    mouse_pos = pygame.mouse.get_pos()
+    color = continue_button_hover_color if continue_button_rect.collidepoint(mouse_pos) else continue_button_color
+    pygame.draw.rect(screen, color, continue_button_rect, border_radius=10)
+    pygame.draw.rect(screen, black, continue_button_rect, width=2, border_radius=10)
+    font = pygame.font.SysFont("arial", 20, bold=True)
+    text = font.render("Continue", True, continue_button_text_color)
+    text_rect = text.get_rect(center=continue_button_rect.center)
+    screen.blit(text, text_rect)
+
 # 初始化互動歷史
 interaction_history = []
 
@@ -609,9 +645,10 @@ def show_interaction_history():
     pygame.display.set_caption(original_caption)
 
     # 更新按鈕位置，適應恢復後的窗口大小
-    global button_rect, record_button_rect
+    global button_rect, record_button_rect, continue_button_rect
     button_rect = pygame.Rect(original_size[0] - 110, original_size[1] - 50, 100, 40)
     record_button_rect = pygame.Rect(original_size[0] - 220, original_size[1] - 50, 100, 40)
+    continue_button_rect = pygame.Rect(original_size[0] - 330, original_size[1] - 50, 100, 40)
 
 # 更新互動歷史
 def update_interaction_history(event_type, detail):
@@ -653,6 +690,7 @@ current_item = "None"  # 初始化當前物品
 
 while running:
     try:
+        ai_thinking.npc = npc_manager.selected_npc
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -661,13 +699,21 @@ while running:
                     running = False
                 elif record_button_rect.collidepoint(event.pos):  # 檢查是否點擊了紀錄按鈕
                     show_interaction_history()
+                elif continue_button_rect.collidepoint(event.pos):  # 檢查是否點擊了繼續按鈕
+                    if npc_manager.selected_npc:
+                        if not ai_thinking.thinking:
+                            ai_thinking.npc = npc_manager.selected_npc
+                            ai_thinking.thinking = True
+                            threading.Thread(target=ai_thinking._think_action, daemon=True).start()
                 elif event.button == 1:
-                    npc_manager.handle_click(event.pos)
+                    if npc_manager.handle_click(event.pos):
+                        ai_thinking.npc = npc_manager.selected_npc
             elif event.type == pygame.VIDEORESIZE:  # 處理視窗大小調整事件
                 window_size = [event.w, event.h]
                 screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
                 button_rect = pygame.Rect(window_size[0] - 110, window_size[1] - 50, 100, 40)  # 更新退出按鈕位置
                 record_button_rect = pygame.Rect(window_size[0] - 220, window_size[1] - 50, 100, 40)  # 更新紀錄按鈕位置
+                continue_button_rect = pygame.Rect(window_size[0] - 330, window_size[1] - 50, 100, 40)  # 更新繼續按鈕位置
 
 
         # 處理鍵盤輸入
@@ -725,6 +771,7 @@ while running:
         # 繪製退出按鈕和紀錄按鈕
         draw_exit_button(screen)
         draw_record_button(screen)
+        draw_continue_button(screen)
 
         # 顯示輸入法提示
         check_input_method()

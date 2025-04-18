@@ -1,101 +1,121 @@
 {
     "items": {
         "magazine": {
+            "name": "magazine",
             "position": [46, 232],
             "type": "reading_material",
             "description": "A magazine for leisure reading."
         },
         "remote_control": {
+            "name": "remote_control",
             "position": [68, 92],
             "type": "electronics",
             "description": "A remote control for operating devices."
         },
         "sofa": {
+            "name": "sofa",
             "position": [300, 225],
             "type": "furniture",
             "description": "A comfortable sofa for sitting."
         },
         "piano": {
+            "name": "piano",
             "position": [489, 100],
             "type": "instrument",
             "description": "A piano for playing music."
         },
         "refrigerator": {
+            "name": "refrigerator",
             "position": [234, 666],
             "type": "appliance",
             "description": "A refrigerator to store food."
         },
         "knife": {
+            "name": "knife",
             "position": [38, 476],
             "type": "kitchen_tool",
             "description": "A sharp knife for cutting."
         },
         "sink": {
+            "name": "sink",
             "position": [49, 616],
             "type": "kitchen_tool",
             "description": "A sink for washing dishes."
         },
         "diary": {
+            "name": "diary",
             "position": [790, 123],
             "type": "stationery",
             "description": "A diary for writing personal notes."
         },
         "pen": {
+            "name": "pen",
             "position": [567, 234],
             "type": "stationery",
             "description": "A pen for writing."
         },
         "book": {
+            "name": "book",
             "position": [571, 721],
             "type": "reading_material",
             "description": "A book for reading."
         },
         "bookshelf": {
+            "name": "bookshelf",
             "position": [571, 721],
             "type": "furniture",
             "description": "A bookshelf to store books."
         },
         "pencil": {
+            "name": "pencil",
             "position": [825, 652],
             "type": "stationery",
             "description": "A pencil for drawing or writing."
         },
         "bed": {
+            "name": "bed",
             "position": [641, 133],
             "type": "furniture",
             "description": "A bed for sleeping."
         },
         "bathtub": {
+            "name": "bathtub",
             "position": [1094, 133],
             "type": "bathroom_fixture",
             "description": "A bathtub for bathing."
         },
         "shower": {
+            "name": "shower",
             "position": [1090, 197],
             "type": "bathroom_fixture",
             "description": "A shower for bathing."
         },
         "tissue": {
+            "name": "tissue",
             "position": [1108, 249],
             "type": "hygiene",
             "description": "A box of tissues."
         },
         "toilet": {
+            "name": "toilet",
             "position": [1084, 290],
             "type": "bathroom_fixture",
             "description": "A toilet for sanitation."
         },
         "table_living_room": {
+            "name": "table_living_room",
             "position": [240, 178],
             "type": "furniture",
             "description": "A table in the living room."
         },
         "table_bedroom": {
+            "name": "table_bedroom",
             "position": [838, 137],
             "type": "furniture",
             "description": "A table in the bedroom."
         },
         "table_study": {
+            "name": "table_study",
             "position": [825, 685],
             "type": "furniture",
             "description": "A study table in the study room."

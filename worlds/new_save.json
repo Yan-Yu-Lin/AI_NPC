@@ -17,7 +17,7 @@
       ]
     },
     {
-      "name": "study_room",
+      "name": "study",
       "description": "一間舒適的書房，木製書架排列整齊。溫暖的燈光創造了完美的閱讀和寫作氛圍。桌上放著一本個人日記，書架上的一本古老書籍引起了你的注意。",
       "connected_spaces": [
         "living_room",
