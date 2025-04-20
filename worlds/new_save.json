@@ -7,25 +7,26 @@
       "description": "一個優雅的客廳，陽光透過高大的窗戶灑落，使華麗的音樂盒閃閃發光。一面美麗的鏡子立在角落，為房間增添深度。",
       "connected_spaces": [
         "kitchen",
-        "garden",
-        "basement",
-        "study_room"
+        "corridor"
       ],
       "items": [
-        "music_box",
-        "mirror"
+        "remote_controll",
+        "maganize",
+        "table_living_room",
+        "sofa",
+        "piano"
       ]
     },
     {
       "name": "study",
       "description": "一間舒適的書房，木製書架排列整齊。溫暖的燈光創造了完美的閱讀和寫作氛圍。桌上放著一本個人日記，書架上的一本古老書籍引起了你的注意。",
       "connected_spaces": [
-        "living_room",
-        "attic"
+        "corridor"
       ],
       "items": [
-        "personal_diary",
-        "ancient_book"
+        "pencil",
+        "table_study",
+        "bookshelf"
       ]
     },
     {
@@ -35,62 +36,77 @@
         "living_room"
       ],
       "items": [
-        "cookbook",
-        "tea_set",
-        "cooking_pot"
+        "knife",
+        "sink",
+        "refrigerator"
       ]
     },
     {
-      "name": "garden",
-      "description": "一個茂盛的花園，色彩繽紛的花朵和芳香的草本植物隨處可見。石頭小徑穿過綠意盎然的植物，通往一個寧靜的石凳。一個銅製澆水壺放在一旁，隨時可以照料植物。",
+      "name": "corridor",
+      "description": "一個寬敞的走廊，牆上掛著一幅古老的畫作。一扇門通向一個寧靜的石凳。一個銅製澆水壺放在一旁，隨時可以照料植物。",
       "connected_spaces": [
-        "living_room"
+        "living_room",
+        "study",
+        "bedroom",
+        "balcony",
+        "bathroom",
+        "toilet"
       ],
       "items": [
-        "watering_can",
-        "stone_bench"
+        
       ]
     },
     {
-      "name": "attic",
-      "description": "一個寬敞的閣樓，灰塵在小圓窗透進的光束中飛舞。一個舊木箱放在角落，而一個黃銅望遠鏡立在窗邊，指向天空。",
+      "name": "bedroom",
+      "description": "一個寬敞的臥室，灰塵在小圓窗透進的光束中飛舞。一個舊木箱放在角落，而一個黃銅望遠鏡立在窗邊，指向天空。",
       "connected_spaces": [
-        "study_room"
+        "corridor"
       ],
       "items": [
-        "old_chest",
-        "telescope"
+        "bed",
+        "pen",
+        "diary",
+        "table_bedroom"
       ]
     },
     {
-      "name": "basement",
-      "description": "一個光線昏暗的地下室，石牆和略微潮濕的氛圍。牆上的架子上擺滿了舊瓶子和奇特的工藝品。中央放著一個神秘裝置，閃爍著燈光，齒輪複雜精緻。",
+      "name": "bathroom",
+      "description": "一個光線昏暗的浴室。",
       "connected_spaces": [
-        "living_room"
+        "corridor"
       ],
       "items": [
-        "mysterious_device"
+        "bathtub",
+        "shower"
+      ]
+    },
+    {
+      "name": "toilet",
+      "description": "一個光線昏暗的廁所",
+      "connected_spaces": [
+        "corridor"
+      ],
+      "items": [
+        "tissue",
+        "toilet"
       ]
     }
   ],
   "items": [
     {
-      "name": "personal_diary",
-      "description": "一本皮革裝訂的日記，頁面鑲有金邊，準備記錄思想和回憶。",
+      "name": "remote_controll",
+      "description": "一個黑色的遙控器，上面有多個按鈕，可以控制家中的電子設備。",
       "interactions": {
-        "read": null,
-        "write": {
-          "content": "str"
-        },
+        "press": null,
         "inspect": null
       },
       "properties": {
-        "content": "親愛的日記，今天我開始了在這個神秘地方的旅程...\n我也開始了一段探索與沉思的旅程。"
+        "battery_level": 80
       }
     },
     {
-      "name": "ancient_book",
-      "description": "一本破舊的古書，封面上有神秘符號，頁面充滿了迷人的故事。",
+      "name": "maganize",
+      "description": "一本雜誌，上面有許多有趣的圖片和故事。",
       "interactions": {
         "read": null,
         "inspect": null
@@ -100,123 +116,169 @@
       }
     },
     {
-      "name": "music_box",
-      "description": "一個裝飾著舞蹈人物的華麗音樂盒，能夠播放迷人的旋律。",
+      "name": "table_living_room",
+      "description": "一個優雅的客廳桌子，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "sofa",
+      "description": "一個舒適的沙發，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "piano",
+      "description": "一個優雅的鋼琴，上面放著一些小物品。",
       "interactions": {
         "play": null,
-        "stop": null,
         "inspect": null
       },
       "properties": {
-        "is_playing": true
+        "is_playing": false
       }
     },
     {
-      "name": "mirror",
-      "description": "一面鍍金框架的優雅全身鏡，完美清晰地反射著房間。",
+      "name": "table_study",
+      "description": "一個優雅的書房桌子，上面放著一些小物品。",
       "interactions": {
         "inspect": null
       },
       "properties": {}
     },
     {
-      "name": "cookbook",
-      "description": "一本使用過的食譜書，邊緣有手寫筆記，喜愛的食譜頁角已經折疊標記。",
+      "name": "bookshelf",
+      "description": "一個精緻的書架，上面放著一些小物品。",
       "interactions": {
-        "read": null,
         "inspect": null
       },
       "properties": {}
     },
     {
-      "name": "tea_set",
-      "description": "一套精緻的花卉圖案瓷器茶具，非常適合沖泡和供應茶。",
+      "name": "pencil",
+      "description": "一個精緻的鉛筆，非常適合寫字。",
       "interactions": {
-        "use": null,
+        "write": {
+          "content": "str"
+        },
         "inspect": null
       },
       "properties": {
-        "is_brewing": false
+        "content": ""
       }
     },
     {
-      "name": "cooking_pot",
-      "description": "一個帶有堅固把手的大型銅鍋，非常適合烹飪豐盛的餐點。",
+      "name": "knife",
+      "description": "一個精緻的刀，非常適合切菜。",
       "interactions": {
-        "cook": {
+        "cut": {
           "ingredient": "str"
         },
-        "examine": null,
-        "clean": null
+        "inspect": null
       },
       "properties": {
-        "contents": "",
+        "is_sharpened": false
+      }
+    },
+    {
+      "name": "sink",
+      "description": "一個精緻的水槽，非常適合清洗小物品。",
+      "interactions": {
+        "clean": null,
+        "inspect": null
+      },
+      "properties": {
         "is_clean": true
       }
     },
     {
-      "name": "watering_can",
-      "description": "一個帶有長嘴的彩繪金屬澆水壺，非常適合照料花園植物。",
+      "name": "refrigerator",
+      "description": "一個精緻的冰箱，上面放著一些小物品。",
       "interactions": {
-        "fill": null,
-        "water": {
-          "plant": "str"
-        },
-        "inspect": null
-      },
-      "properties": {
-        "water_level": 0,
-        "max_capacity": 10
-      }
-    },
-    {
-      "name": "stone_bench",
-      "description": "一個風化的石凳，坐落在開花植物之間，提供一個寧靜的沉思之地。",
-      "interactions": {
-        "sit": null,
+        "open": null,
         "inspect": null
       },
       "properties": {}
     },
     {
-      "name": "old_chest",
-      "description": "一個帶有鐵配件的塵土飛揚的木箱，上鎖且似乎多年未被觸碰。",
+      "name": "bed",
+      "description": "一個精緻的床，上面放著一些小物品。",
       "interactions": {
-        "open": null,
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "diary",
+      "description": "一本皮革裝訂的日記，頁面鑲有金邊，準備記錄思想和回憶。",
+      "interactions": {
+        "read": null,
+        "write": {
+          "content": "str"
+        },
         "inspect": null
       },
       "properties": {
-        "is_locked": true
+        "content": ""
       }
     },
     {
-      "name": "telescope",
-      "description": "一個安裝在窗邊的古董黃銅望遠鏡，指向夜空。",
+      "name": "pen",
+      "description": "一個精緻的筆，非常適合寫字。",
+      "interactions": {
+        "write": {
+          "content": "str"
+        },
+        "inspect": null
+      },
+      "properties": {
+        "content": ""
+      }
+    },
+    {
+      "name": "table_bedroom",
+      "description": "一個精緻的床，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "bathtub",
+      "description": "一個精緻的浴缸，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "shower",
+      "description": "一個精緻的淋浴，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "tissue",
+      "description": "一包精緻的衛生紙，非常適合使用。",
       "interactions": {
         "use": null,
-        "adjust": null,
         "inspect": null
       },
-      "properties": {
-        "is_focused": false
-      }
+      "properties": {}
     },
     {
-      "name": "mysterious_device",
-      "description": "一個奇怪的機械裝置，帶有齒輪、按鈕和閃爍的燈光，用途不明。",
+      "name": "toilet",
+      "description": "一個精緻的廁所，上面放著一些小物品。",
       "interactions": {
-        "activate": null,
-        "adjust": {
-          "setting": "str"
-        },
-        "disassemble": null,
         "inspect": null
       },
-      "properties": {
-        "is_active": false,
-        "current_setting": "standby",
-        "energy_level": 75
-      }
+      "properties": {}
     }
   ],
   "npcs": [

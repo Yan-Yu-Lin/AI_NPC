@@ -7,33 +7,21 @@ import datetime  # 用於記錄互動時間
 from npc_manager import NPCManager
 from AI_thinking import AIThinking
 import threading
+from save_data import save_game_data  # 匯入存檔功能
+
+pygame.init()
+pygame.font.init()
 
 thinking_lock = threading.Lock()
 npc_manager = NPCManager("npc.json")
 
-# 先讀取地圖檔案並解析空間資訊
-# （這段必須在 AIThinking 初始化前）
-default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "maps", "map.json")
-with open(default_map_path, "r", encoding="utf-8") as f:
-    map_data = json.load(f)
-space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
-space_size = {name: list(size) for name, size in map_data["space_size"].items()}
+# 顏色
+white = (255, 255, 255)
+black = (0, 0, 0)
+yellow = (255, 255, 0)
+brown = (165, 42, 42)
+blue = (0, 0, 255)  # 新增藍色，用於門的顏色
 
-# 再初始化 AIThinking
-ai_thinking = AIThinking(
-    npc_manager.selected_npc, 
-    buttons=None, 
-    thinking_lock=thinking_lock, 
-    space_positions=space_positions, 
-    space_size=space_size)
-
-original_caption = "AI NPC Simulation System"  # 更改為英文標題
-
-# 初始化 pygame
-pygame.init()
-pygame.font.init()  # 初始化字體模組
-
-# 在 pygame.init() 之後、主循環之前新增以下函數
 def show_map_selection():
     map_selection_running = True
     map_screen = pygame.display.set_mode((600, 400))
@@ -41,7 +29,7 @@ def show_map_selection():
 
     # 確定地圖資料夾路徑
     maps_dir = os.path.join(os.path.dirname(__file__), "worlds", "maps")
-    default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "map.json")
+    default_map_path = os.path.join(maps_dir, "map.json")
 
     # 創建資料夾如果不存在
     if not os.path.exists(maps_dir):
@@ -53,9 +41,11 @@ def show_map_selection():
 
     # 獲取所有可用地圖
     available_maps = [f for f in os.listdir(maps_dir) if f.endswith('.json')]
-    # 加入預設地圖選項
-    if os.path.exists(default_map_path):
-        available_maps.insert(0, "Default Map")
+    available_map_paths = [os.path.join(maps_dir, f) for f in available_maps]
+    # 加入預設地圖選項（如果不是已經在列表裡）
+    if os.path.exists(default_map_path) and "map.json" not in available_maps:
+        available_maps.insert(0, "map.json")
+        available_map_paths.insert(0, default_map_path)
 
     # 如果沒有找到地圖文件
     if not available_maps:
@@ -64,7 +54,7 @@ def show_map_selection():
         text = font.render("No maps found. Using default map.", True, (255, 0, 0))
         map_screen.blit(text, (150, 180))
         pygame.display.flip()
-        pygame.time.wait(2000)  # 等待2秒
+        pygame.time.wait(2000)
         return default_map_path
 
     # 計算按鈕位置與大小
@@ -82,89 +72,186 @@ def show_map_selection():
         map_buttons.append({
             'name': map_name,
             'rect': pygame.Rect(100, button_start_y + i * (button_height + button_margin), button_width, button_height),
-            'hover': False
+            'hover': False,
+            'path': available_map_paths[i]
         })
 
-    selected_map_path = default_map_path  # 預設值
+    selected_map_path = available_map_paths[0]  # 預設值
 
     while map_selection_running:
         map_screen.fill(white)
-
         # 標題
         title_font = pygame.font.SysFont("arial", 32, bold=True)
         title = title_font.render("Select a Map", True, black)
         title_rect = title.get_rect(center=(300, 25))
         map_screen.blit(title, title_rect)
-
         # 滑鼠位置
         mouse_pos = pygame.mouse.get_pos()
-
+        # 繪製地圖按鈕
+        for btn in map_buttons:
+            btn['hover'] = btn['rect'].collidepoint(mouse_pos)
+            color = (180, 180, 255) if btn['hover'] else (220, 220, 220)
+            pygame.draw.rect(map_screen, color, btn['rect'], border_radius=10)
+            pygame.draw.rect(map_screen, (0,0,0), btn['rect'], width=2, border_radius=10)
+            font = pygame.font.SysFont("arial", 20, bold=True)
+            text = font.render(btn['name'], True, (0,0,0))
+            text_rect = text.get_rect(center=btn['rect'].center)
+            map_screen.blit(text, text_rect)
+        # 處理事件
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return default_map_path  # 如果關閉視窗，使用預設地圖
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                # 檢查是否點擊了地圖按鈕
-                for button in map_buttons:
-                    if button['rect'].collidepoint(mouse_pos):
-                        if button['name'] == "Default Map":
-                            selected_map_path = default_map_path
-                        else:
-                            selected_map_path = os.path.join(maps_dir, button['name'])
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                for btn in map_buttons:
+                    if btn['rect'].collidepoint(event.pos):
+                        selected_map_path = btn['path']
                         map_selection_running = False
                         break
-
-                # 檢查是否點擊了返回按鈕
-                if back_button_rect.collidepoint(mouse_pos):
-                    return default_map_path  # 返回按鈕使用預設地圖
-
-        # 繪製地圖按鈕
-        for button in map_buttons:
-            # 檢查懸停狀態
-            button['hover'] = button['rect'].collidepoint(mouse_pos)
-
-            # 按鈕顏色
-            if button['hover']:
-                color = (100, 150, 255)  # 懸停時顏色
-            else:
-                color = (150, 200, 255)  # 正常顏色
-
-            # 繪製按鈕
-            pygame.draw.rect(map_screen, color, button['rect'], border_radius=10)
-            pygame.draw.rect(map_screen, black, button['rect'], width=2, border_radius=10)  # 邊框
-
-            # 按鈕文字
-            button_font = pygame.font.SysFont("arial", 20)
-            display_name = button['name'].replace('.json', '').replace('_', ' ').title()
-            text = button_font.render(display_name, True, black)
-            text_rect = text.get_rect(center=button['rect'].center)
-            map_screen.blit(text, text_rect)
-
-        # 繪製返回按鈕
-        back_color = (200, 200, 0) if back_button_rect.collidepoint(mouse_pos) else (150, 150, 0)
-        pygame.draw.rect(map_screen, back_color, back_button_rect, border_radius=10)
-        pygame.draw.rect(map_screen, black, back_button_rect, width=2, border_radius=10)
-        back_font = pygame.font.SysFont("arial", 20, bold=True)
-        back_text = back_font.render("Cancel", True, black)
-        back_text_rect = back_text.get_rect(center=back_button_rect.center)
-        map_screen.blit(back_text, back_text_rect)
-
         pygame.display.flip()
+    return selected_map_path
 
-    # 重新設定主視窗
-    screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
-    pygame.display.set_caption(original_caption)
+selected_map_path = show_map_selection()
+with open(selected_map_path, "r", encoding="utf-8") as f:
+    map_data = json.load(f)
 
+if "space_positions" in map_data and "space_size" in map_data:
+    # 標準格式（如 map.json）
+    space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
+    space_size = {name: list(size) for name, size in map_data["space_size"].items()}
+elif "spaces" in map_data:
+    # RPG/新格式（如 new_save.json/world_test.json）
+    space_positions = {}
+    space_size = {}
+    for idx, space in enumerate(map_data["spaces"]):
+        name = space["name"]
+        # 預設座標與大小（可根據 idx 或自訂）
+        space_positions[name] = [100 + idx * 100, 100 + idx * 50]
+        space_size[name] = [200, 150]
+else:
+    raise KeyError("地圖文件缺少 'space_positions'/'space_size' 或 'spaces' 欄位，無法初始化地圖。")
+
+ai_thinking = AIThinking(
+    npc_manager.selected_npc,
+    buttons=None,
+    thinking_lock=thinking_lock,
+    space_positions=space_positions,
+    space_size=space_size,
+    map_path=selected_map_path  # 新增 map_path 參數
+)
+
+# 先讀取地圖檔案並解析空間資訊
+# （這段必須在 AIThinking 初始化前）
+# default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "maps", "map.json")
+# with open(default_map_path, "r", encoding="utf-8") as f:
+#     map_data = json.load(f)
+# space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
+# space_size = {name: list(size) for name, size in map_data["space_size"].items()}
+
+# 再初始化 AIThinking
+# ai_thinking = AIThinking(
+#     npc_manager.selected_npc, 
+#     buttons=None, 
+#     thinking_lock=thinking_lock, 
+#     space_positions=space_positions, 
+#     space_size=space_size)
+
+original_caption = "AI NPC Simulation System"  # 更改為英文標題
+
+# 在 pygame.init() 之後、主循環之前新增以下函數
+def show_map_selection():
+    map_selection_running = True
+    map_screen = pygame.display.set_mode((600, 400))
+    pygame.display.set_caption("Map Selection")
+
+    # 確定地圖資料夾路徑
+    maps_dir = os.path.join(os.path.dirname(__file__), "worlds", "maps")
+    default_map_path = os.path.join(maps_dir, "map.json")
+
+    # 創建資料夾如果不存在
+    if not os.path.exists(maps_dir):
+        os.makedirs(maps_dir)
+        # 如果是新創建的資料夾，把預設地圖複製進去作為第一個選項
+        if os.path.exists(default_map_path):
+            import shutil
+            shutil.copy(default_map_path, os.path.join(maps_dir, "default_map.json"))
+
+    # 獲取所有可用地圖
+    available_maps = [f for f in os.listdir(maps_dir) if f.endswith('.json')]
+    available_map_paths = [os.path.join(maps_dir, f) for f in available_maps]
+    # 加入預設地圖選項（如果不是已經在列表裡）
+    if os.path.exists(default_map_path) and "map.json" not in available_maps:
+        available_maps.insert(0, "map.json")
+        available_map_paths.insert(0, default_map_path)
+
+    # 如果沒有找到地圖文件
+    if not available_maps:
+        font = pygame.font.SysFont("arial", 20, bold=True)
+        map_screen.fill(white)
+        text = font.render("No maps found. Using default map.", True, (255, 0, 0))
+        map_screen.blit(text, (150, 180))
+        pygame.display.flip()
+        pygame.time.wait(2000)
+        return default_map_path
+
+    # 計算按鈕位置與大小
+    button_width = 400
+    button_height = 50
+    button_margin = 10
+    button_start_y = 50
+
+    # 定義返回按鈕
+    back_button_rect = pygame.Rect(250, 350, 100, 40)
+
+    # 建立地圖按鈕列表
+    map_buttons = []
+    for i, map_name in enumerate(available_maps):
+        map_buttons.append({
+            'name': map_name,
+            'rect': pygame.Rect(100, button_start_y + i * (button_height + button_margin), button_width, button_height),
+            'hover': False,
+            'path': available_map_paths[i]
+        })
+
+    selected_map_path = available_map_paths[0]  # 預設值
+
+    while map_selection_running:
+        map_screen.fill(white)
+        # 標題
+        title_font = pygame.font.SysFont("arial", 32, bold=True)
+        title = title_font.render("Select a Map", True, black)
+        title_rect = title.get_rect(center=(300, 25))
+        map_screen.blit(title, title_rect)
+        # 滑鼠位置
+        mouse_pos = pygame.mouse.get_pos()
+        # 繪製地圖按鈕
+        for btn in map_buttons:
+            btn['hover'] = btn['rect'].collidepoint(mouse_pos)
+            color = (180, 180, 255) if btn['hover'] else (220, 220, 220)
+            pygame.draw.rect(map_screen, color, btn['rect'], border_radius=10)
+            pygame.draw.rect(map_screen, (0,0,0), btn['rect'], width=2, border_radius=10)
+            font = pygame.font.SysFont("arial", 20, bold=True)
+            text = font.render(btn['name'], True, (0,0,0))
+            text_rect = text.get_rect(center=btn['rect'].center)
+            map_screen.blit(text, text_rect)
+        # 處理事件
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                for btn in map_buttons:
+                    if btn['rect'].collidepoint(event.pos):
+                        selected_map_path = btn['path']
+                        map_selection_running = False
+                        break
+        pygame.display.flip()
     return selected_map_path
 
 # 使用可調整大小的視窗
 window_size = [1500, 800]  # 初始視窗大小
 screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
 pygame.display.set_caption(original_caption)
-
-# 顏色
-white = (255, 255, 255)
-black = (0, 0, 0)
 
 # 檢測當前輸入法是否為英文，並在畫面中央提示用戶切換
 def check_input_method():
@@ -185,50 +272,51 @@ def check_input_method():
         print(f"Error checking input method: {e}")
 
 # 從 map.json 載入空間資料
-default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "maps", "map.json")
+# default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "maps", "map.json")
 
 # 顯示地圖選擇介面，獲取選擇的地圖路徑
-selected_map_path = show_map_selection()
+# selected_map_path = show_map_selection()
 
 # 檢查選擇的地圖文件是否存在
-if not os.path.exists(selected_map_path):
-    print(f"找不到地圖文件: {selected_map_path}，使用默認地圖")
-    selected_map_path = default_map_path
+# if not os.path.exists(selected_map_path):
+#     print(f"找不到地圖文件: {selected_map_path}，使用默認地圖")
+#     selected_map_path = default_map_path
 
 # 如果默認地圖也不存在，拋出錯誤
-if not os.path.exists(selected_map_path):
-    raise FileNotFoundError(f"找不到地圖文件，請確保地圖文件存在: {selected_map_path}")
+# if not os.path.exists(selected_map_path):
+#     raise FileNotFoundError(f"找不到地圖文件，請確保地圖文件存在: {selected_map_path}")
 
 # 顯示使用的地圖路徑
-print(f"使用地圖: {selected_map_path}")
+# print(f"使用地圖: {selected_map_path}")
 
 try:
-    with open(selected_map_path, "r", encoding="utf-8") as f:
-        raw_data = f.read()
-        map_data = json.loads(raw_data)
+    # with open(selected_map_path, "r", encoding="utf-8") as f:
+    #     raw_data = f.read()
+    #     map_data = json.loads(raw_data)
+    pass
 except (FileNotFoundError, json.JSONDecodeError) as e:
     raise RuntimeError(f"無法讀取或解析地圖文件: {e}")
 
 # 檢查 map.json 是否包含 space_positions、space_size 和 space_colors 鍵
-if "space_positions" not in map_data or "space_size" not in map_data or "space_colors" not in map_data:
-    raise KeyError("map.json 文件中缺少 'space_positions'、'space_size' 或 'space_colors' 鍵，請檢查文件內容是否正確。")
+# if "space_positions" not in map_data or "space_size" not in map_data or "space_colors" not in map_data:
+#     raise KeyError("map.json 文件中缺少 'space_positions'、'space_size' 或 'space_colors' 鍵，請檢查文件內容是否正確。")
 
-space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
-space_size = {name: list(size) for name, size in map_data["space_size"].items()}
-space_colors = {name: list(color) for name, color in map_data["space_colors"].items()}
+# space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
+# space_size = {name: list(size) for name, size in map_data["space_size"].items()}
+# space_colors = {name: list(color) for name, color in map_data["space_colors"].items()}
 
 # 從 map.json 載入門的資料
-doors = {name: data for name, data in map_data["space_positions"].items() if "door_" in name}
-door_sizes = {
-    name: list(map_data["space_size"][data["direction"]]) for name, data in doors.items()
-}
+# doors = {name: data for name, data in map_data["space_positions"].items() if "door_" in name}
+# door_sizes = {
+#     name: list(map_data["space_size"][data["direction"]]) for name, data in doors.items()
+# }
 
 # 顏色
-white = (255, 255, 255)
-black = (0, 0, 0)
-yellow = (255, 255, 0)
-brown = (165, 42, 42)
-blue = (0, 0, 255)  # 新增藍色，用於門的顏色
+# white = (255, 255, 255)
+# black = (0, 0, 0)
+# yellow = (255, 255, 0)
+# brown = (165, 42, 42)
+# blue = (0, 0, 255)  # 新增藍色，用於門的顏色
 
 # 從 item.json 載入物品資料
 item_path = os.path.join(os.path.dirname(__file__), "worlds", "item.json")  # 指定 item.json 路徑
@@ -495,6 +583,16 @@ continue_button_hover_color = (0, 180, 255)  # 更亮的藍色
 continue_button_text_color = white
 continue_button_rect = pygame.Rect(window_size[0] - 330, window_size[1] - 50, 100, 40)  # 繼續按鈕位置與大小（紀錄按鈕左側）
 
+# 定義存檔按鈕屬性
+save_button_color = (120, 60, 200)
+save_button_hover_color = (150, 90, 255)
+save_button_text_color = white
+save_button_rect = pygame.Rect(window_size[0] - 440, window_size[1] - 50, 100, 40)  # 存檔按鈕位置（繼續按鈕左側）
+
+# 存檔檔名輸入框狀態
+inputting_save_filename = False
+save_filename_input = ""
+
 # 繪製繼續按鈕
 def draw_continue_button(screen):
     mouse_pos = pygame.mouse.get_pos()
@@ -506,8 +604,16 @@ def draw_continue_button(screen):
     text_rect = text.get_rect(center=continue_button_rect.center)
     screen.blit(text, text_rect)
 
-# 初始化互動歷史
-interaction_history = []
+# 繪製存檔按鈕
+def draw_save_button(screen):
+    mouse_pos = pygame.mouse.get_pos()
+    color = save_button_hover_color if save_button_rect.collidepoint(mouse_pos) else save_button_color
+    pygame.draw.rect(screen, color, save_button_rect, border_radius=10)
+    pygame.draw.rect(screen, black, save_button_rect, width=2, border_radius=10)
+    font = pygame.font.SysFont("arial", 20, bold=True)
+    text = font.render("Save", True, save_button_text_color)
+    text_rect = text.get_rect(center=save_button_rect.center)
+    screen.blit(text, text_rect)
 
 # 繪製退出按鈕
 def draw_exit_button(screen):
@@ -688,6 +794,8 @@ FPS = int(os.getenv("FPS", 30))  # 默認為 30，可通過環境變數設置
 current_space = "Unknown"  # 初始化當前空間
 current_item = "None"  # 初始化當前物品
 
+interaction_history = []
+
 while running:
     try:
         ai_thinking.npc = npc_manager.selected_npc
@@ -705,16 +813,28 @@ while running:
                             ai_thinking.npc = npc_manager.selected_npc
                             ai_thinking.thinking = True
                             threading.Thread(target=ai_thinking._think_action, daemon=True).start()
-                elif event.button == 1:
-                    if npc_manager.handle_click(event.pos):
-                        ai_thinking.npc = npc_manager.selected_npc
+                elif save_button_rect.collidepoint(event.pos):  # 檢查是否點擊了存檔按鈕
+                    inputting_save_filename = True  # 開始輸入檔名
+                elif npc_manager.handle_click(event.pos):
+                    ai_thinking.npc = npc_manager.selected_npc
+            elif event.type == pygame.KEYDOWN and inputting_save_filename:
+                if event.key == pygame.K_RETURN:
+                    if save_filename_input.strip():
+                        save_game_data(npc_manager, [h for npc in npc_manager.npcs for h in getattr(npc, 'action_history', [])], interaction_history, filename=save_filename_input.strip())
+                    inputting_save_filename = False
+                    save_filename_input = ""
+                elif event.key == pygame.K_BACKSPACE:
+                    save_filename_input = save_filename_input[:-1]
+                else:
+                    if len(save_filename_input) < 32:
+                        save_filename_input += event.unicode
             elif event.type == pygame.VIDEORESIZE:  # 處理視窗大小調整事件
                 window_size = [event.w, event.h]
                 screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
                 button_rect = pygame.Rect(window_size[0] - 110, window_size[1] - 50, 100, 40)  # 更新退出按鈕位置
                 record_button_rect = pygame.Rect(window_size[0] - 220, window_size[1] - 50, 100, 40)  # 更新紀錄按鈕位置
                 continue_button_rect = pygame.Rect(window_size[0] - 330, window_size[1] - 50, 100, 40)  # 更新繼續按鈕位置
-
+                save_button_rect = pygame.Rect(window_size[0] - 440, window_size[1] - 50, 100, 40)  # 更新存檔按鈕位置
 
         # 處理鍵盤輸入
         keys = pygame.key.get_pressed()
@@ -772,9 +892,21 @@ while running:
         draw_exit_button(screen)
         draw_record_button(screen)
         draw_continue_button(screen)
+        draw_save_button(screen)
 
         # 顯示輸入法提示
         check_input_method()
+
+        # 顯示輸入存檔檔名的輸入框
+        if inputting_save_filename:
+            font = pygame.font.SysFont("arial", 24, bold=True)
+            input_box_rect = pygame.Rect(window_size[0]//2 - 150, window_size[1]//2 - 30, 300, 50)
+            pygame.draw.rect(screen, (255,255,255), input_box_rect)
+            pygame.draw.rect(screen, (0,0,0), input_box_rect, 2)
+            prompt = font.render("Enter save filename:", True, (0,0,0))
+            screen.blit(prompt, (input_box_rect.x+10, input_box_rect.y+5))
+            filename_text = font.render(save_filename_input + "|", True, (0,0,200))
+            screen.blit(filename_text, (input_box_rect.x+10, input_box_rect.y+28))
 
         # 更新顯示
         pygame.display.flip()

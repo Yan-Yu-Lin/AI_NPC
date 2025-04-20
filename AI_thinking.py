@@ -19,7 +19,7 @@ GPT_MODEL = "gpt-4.1-mini"  # gpt-4.1-mini 對應的API名稱，若未來官方�
 USER_CUSTOM_PROMPT = """你是一個遊戲中的 NPC，請根據遊戲規則與角色個性做出合理行動。"""
 
 class AIThinking:
-    def __init__(self, npc, buttons, thinking_lock, space_positions=None, space_size=None):
+    def __init__(self, npc, buttons, thinking_lock, space_positions=None, space_size=None, map_path=None):
         self.npc = npc
         self.buttons = buttons if buttons is not None else []
         self.thinking_lock = thinking_lock
@@ -30,6 +30,7 @@ class AIThinking:
         self.space_positions = space_positions
         self.space_size = space_size
         self.last_action_time = time.time()
+        self.map_path = map_path  # 新增 map_path 屬性
         # 你可以根據需要初始化 space_history、target_pos 等
 
     def _think_action(self):
@@ -82,8 +83,8 @@ class AIThinking:
         if not current_space or current_space == "Unknown":
             current_space = "living_room"
 
-        # 載入 new_save.json
-        save_path = os.path.join(os.path.dirname(__file__), "worlds", "new_save.json")  # 載入 save_data
+        # 載入地圖資料（動態路徑）
+        save_path = self.map_path if self.map_path else os.path.join(os.path.dirname(__file__), "worlds", "new_save.json")
         save_data = load_save_data(save_path)
 
         # 取得目前空間內所有物品
@@ -94,8 +95,51 @@ class AIThinking:
         interactive_items = [item for item in items_in_space if 'interactions' in item and isinstance(item['interactions'], dict) and len(item['interactions']) > 0]
         self.npc.available_items = interactive_items    # 將可互動物品存進 self.npc 或其他屬性，供 AI 判斷使用
 
+        # 1. 先自動判斷目前空間
+        npc_space = self.npc.get_current_space(self.space_positions, self.space_size)
+        self.npc.current_space = npc_space
+        print(f"[DEBUG] 目前自動判斷空間: {npc_space}")
+
+        # 2. 再設定可移動空間
+        self.set_npc_available_spaces_from_save(self.npc)
+        # 只取不等於目前空間的可移動空間，避免AI選到自己
+        available_spaces = [s for s in getattr(self.npc, "available_spaces", []) if s != self.npc.current_space]
+        print(f"可移動空間: {available_spaces}")
+
+        # 3. 產生 function schema（這樣 enum 就是正確的）
+        actions = ["interact_item", "talk_npc"]
+        if available_spaces:
+            actions.append("move")
+        functions = [
+            {
+                "name": "decide_action",
+                "description": "Decides the next action for the NPC.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action_type": {"type": "string", "enum": actions},
+                        "target": {"type": "string", "default": ""},
+                        "target_space": {
+                            "type": "string",
+                            "enum": available_spaces,
+                            "description": f"可前往的目標空間，只能從這些空間選一個（目前所在空間為 {self.npc.current_space}，絕對不準選到跟目前空間一樣的空間）"
+                        } if available_spaces else {"type": "string", "default": ""},
+                        "target_npc": {"type": "string", "default": ""},
+                        "dialogue": {"type": "string", "default": ""},
+                        "target_item": {"type": "string", "default": ""}
+                    },
+                    "required": ["action_type"]
+                }
+            }
+        ]
+
         # 獲取當前模式
         schema = self.npc.update_schema()
+        
+        # 修正 spaces 為空時避免 index error
+        schema_spaces = schema.get('spaces', [])
+        if not schema_spaces:
+            schema_spaces = [self.npc.current_space or "Unknown"]
         
         # 每次都重建完整的 system prompt，包含自訂內容與 schema
         # 直接用 self.npc.available_items 產生物品描述
@@ -113,7 +157,7 @@ class AIThinking:
             "你是一個遊戲中的NPC，你只能進行以下動作: "
             f"{schema['actions']}。\n"
             "你目前所在的空間為: "
-            f"{schema['spaces'][0]}。\n"
+            f"{schema_spaces[0]}。\n"
             f"你可以互動的物品有: {items_desc}。\n"
             "當 action_type 為 'interact_item' 時，必須指定 target_item。\n"
             "你是一個好奇的 NPC，請優先與物品互動，如果沒有物品可互動時再考慮移動空間。\n"
@@ -128,26 +172,6 @@ class AIThinking:
             print(f"模型: {GPT_MODEL}")
             print(f"歷史記錄長度: {len(self.npc.history)}")
             print("=================\n")
-
-            # 修正：直接使用正確的 function schema
-            functions = [
-                {
-                    "name": "decide_action",
-                    "description": "Decides the next action for the NPC.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "action_type": {"type": "string"},
-                            "target": {"type": "string", "default": ""},
-                            "target_space": {"type": "string", "default": ""},
-                            "target_npc": {"type": "string", "default": ""},
-                            "dialogue": {"type": "string", "default": ""},
-                            "target_item": {"type": "string", "default": ""}
-                        },
-                        "required": ["properties", "action_type", "target_item"]
-                    }
-                }
-            ]
 
             response = client.chat.completions.create(
                 model=GPT_MODEL,
@@ -185,15 +209,23 @@ class AIThinking:
             
             try:
                 # 僅允許三種動作: 進入空間、與NPC交談、與物品互動
-                if action_type == "enter_space":
-                    target_space = function_args.get("target_space", "")
-                    self.npc.target_space = target_space
-                    result = self.npc.move_to_space(target_space)
-                    self.npc.add_space_to_history()
+                if action_type == "move":
+                    target_space = function_args.get("target_space", "")    # 取得目標空間
+                    print(f"目標空間: {target_space}")
+                    if not target_space:
+                        target_space = "Unknown"
+                    if target_space:
+                        self.npc.target_space = target_space
+                        result = self.npc.move_to_space(target_space)
+                        print(result)
+                    else:
+                        result = "沒有可移動的目標空間。"
+
                 elif action_type == "talk_to_npc":
                     target_npc = function_args.get("target_npc", "")
                     dialogue = function_args.get("dialogue", "")
                     result = self.npc.talk_to_npc(target_npc, dialogue)
+
                 elif action_type == "interact_item":
                     target_item = function_args.get("target_item", "")  # 互動物品
                     print(f"互動物品: {target_item}")
@@ -227,3 +259,23 @@ class AIThinking:
             tb = traceback.format_exc()
             print(f"處理NPC行為時出錯: {str(e)}\n{tb}")
             return f"處理NPC行為時出錯: {str(e)}"
+
+    def set_npc_available_spaces_from_save(self, npc, save_json_path=None):
+        """
+        根據 NPC 當前空間，自動設置 available_spaces（讀取 new_save.json 的 connected_spaces）
+        """
+        if save_json_path is None:
+            save_json_path = self.map_path if self.map_path else os.path.join(os.path.dirname(__file__), "worlds", "new_save.json")
+        try:
+            with open(save_json_path, "r", encoding="utf-8") as f:
+                save_data = json.load(f)
+            spaces = save_data.get("spaces", [])
+            current_space = getattr(npc, "current_space", None) # 取得當前空間名稱
+            for space in spaces:
+                if space.get("name") == current_space: # 找到當前空間
+                    npc.available_spaces = space.get("connected_spaces", []) # 設置可進入的空間
+                    return
+            npc.available_spaces = [] # 沒有找到當前空間，設定為空
+        except Exception as e:
+            print(f"[錯誤] 載入 available_spaces 失敗: {e}")
+            npc.available_spaces = []

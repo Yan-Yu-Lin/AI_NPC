@@ -55,11 +55,12 @@ class NPC:
         return distance <= self.radius
 
     def update_schema(self):
-        # 僅允許進入空間、與NPC交談、與物品互動
+        # 允許與物品互動、移動、與其他NPC對話
         return {
-            "actions": ["interact_item"], # 設定可用的動作
-            "spaces": [getattr(self, "current_space", "Unknown")],
-            "items": getattr(self, "available_items", [])
+            "actions": ["interact_item", "move", "talk_npc"],  # 可用動作
+            "spaces": getattr(self, "available_spaces", [getattr(self, "current_space", "Unknown")]),   # 可進入的空間
+            "items": getattr(self, "available_items", []),   # 可互動的物品
+            "npcs": getattr(self, "available_npcs", [])   # 可互動的 NPC
         }
 
     def get_current_space(self, space_positions=None, space_size=None):
@@ -76,6 +77,37 @@ class NPC:
             if pos[0] <= x <= pos[0] + size[0] and pos[1] <= y <= pos[1] + size[1]: # 判斷是否在空間範圍內
                 return space_name   # 回傳空間名稱
         return "Unknown"
+
+    def interact_with_item(self, item_dict):
+        """
+        處理 NPC 與物品的互動。
+        Args:
+            item_dict: 互動的物品資料（dict），格式如 {"item_name": {...}}
+        Returns:
+            描述互動結果的字符串
+        """
+        if not item_dict:
+            return "沒有指定要互動的物品。"
+        item_name = list(item_dict.keys())[0]
+        # 這裡可以根據你的遊戲邏輯擴充
+        return f"{self.name} 與 {item_name} 進行了互動。"
+
+    def move_to_space(self, target_space):
+        """
+        將 NPC 移動到指定空間
+        Args:
+            target_space: 目標空間名稱（字串）
+        Returns:
+            描述移動結果的字串
+        """
+        if not target_space or target_space == "Unknown":
+            return f"{self.name} 無法移動，目標空間未知。"
+        prev_space = self.get_current_space() # 取得當前空間
+        # 防呆：如果目標空間等於目前空間，直接回傳已在該空間
+        if target_space == prev_space:
+            return f"{self.name} 已經在 {target_space}，無需移動。"
+        self.current_space = target_space # 正確更新目標空間
+        return f"{self.name} 從 {prev_space} 移動到 {target_space}。"
 
 class NPCManager:
     def __init__(self, json_path):
