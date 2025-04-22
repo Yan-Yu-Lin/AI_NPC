@@ -1,5 +1,6 @@
-# Byte-compiled / optimized / DLL files
+# Python bytecode and cache
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -50,4 +51,5 @@ Thumbs.db
 # Other
 *~
 
+# Archives
 archive/
