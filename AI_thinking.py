@@ -31,6 +31,8 @@ class AIThinking:
         self.space_size = space_size
         self.last_action_time = time.time()
         self.map_path = map_path  # 新增 map_path 屬性
+        self.target_item = None  # 改為 None 預設
+        self.target_space = None  # 新增 target_space 屬性
         # 你可以根據需要初始化 space_history、target_pos 等
 
     def _think_action(self):
@@ -199,6 +201,13 @@ class AIThinking:
             action_data = function_args
             print(action_data)
 
+            # === AI 回傳結果合法性檢查 ===
+            if action_data.get("action_type") == "move":
+                target_space = action_data.get("target_space")
+                if target_space not in available_spaces:
+                    print(f"[警告] AI 回傳非法 target_space: {target_space}，可選: {available_spaces}")
+                    return f"[AI錯誤] target_space {target_space} 不在可移動空間內，忽略本次移動。"
+
             # 如果沒有動作
             if not action_data:
                 self.npc.history.append({"role": "system", "content": "沒有採取任何動作。"})
@@ -229,6 +238,7 @@ class AIThinking:
                 elif action_type == "interact_item":
                     target_item = function_args.get("target_item", "")  # 互動物品
                     print(f"互動物品: {target_item}")
+                    self.target_item = target_item  # 存到 AIThinking 實例
                     self.npc.item_name = target_item if target_item else ""
                     available_items = getattr(self.npc, "available_items", [])
                     item_list = [item['name'] for item in available_items]
@@ -252,6 +262,14 @@ class AIThinking:
             print(result)
             print("=================\n")
             
+            # --- 修正：根據 AI 回傳的 action_type 設定 target_space/target_item ---
+            self.target_space = None
+            self.target_item = None
+            if action_data.get("action_type") == "move":
+                self.target_space = action_data.get("target_space")
+            elif action_data.get("action_type") == "interact_item":
+                self.target_item = action_data.get("target_item")
+            
             return result
         
         except Exception as e:
@@ -264,12 +282,11 @@ class AIThinking:
         """
         根據 NPC 當前空間，自動設置 available_spaces（讀取 new_save.json 的 connected_spaces）
         """
-        if save_json_path is None:
-            save_json_path = self.map_path if self.map_path else os.path.join(os.path.dirname(__file__), "worlds", "new_save.json")
+        save_json_path = os.path.join(os.path.dirname(__file__), "worlds", "new_save.json") # 指定地圖路徑
         try:
             with open(save_json_path, "r", encoding="utf-8") as f:
                 save_data = json.load(f)
-            spaces = save_data.get("spaces", [])
+            spaces = save_data.get("spaces", [])    # 取得所有空間物件
             current_space = getattr(npc, "current_space", None) # 取得當前空間名稱
             for space in spaces:
                 if space.get("name") == current_space: # 找到當前空間

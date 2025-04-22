@@ -10,7 +10,7 @@
         "corridor"
       ],
       "items": [
-        "remote_controll",
+        "remote_control",
         "maganize",
         "table_living_room",
         "sofa",
@@ -90,11 +90,21 @@
         "tissue",
         "toilet"
       ]
+    },
+    {
+      "name": "balcony",
+      "description": "一個寬敞的陽台，可以欣賞到美景。",
+      "connected_spaces": [
+        "corridor"
+      ],
+      "items": [
+
+      ]
     }
   ],
   "items": [
     {
-      "name": "remote_controll",
+      "name": "remote_control",
       "description": "一個黑色的遙控器，上面有多個按鈕，可以控制家中的電子設備。",
       "interactions": {
         "press": null,

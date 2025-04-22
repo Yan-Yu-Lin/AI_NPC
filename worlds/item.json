@@ -1,10 +1,10 @@
 {
     "items": {
-        "magazine": {
-            "name": "magazine",
+        "maganize": {
+            "name": "maganize",
             "position": [46, 232],
             "type": "reading_material",
-            "description": "A magazine for leisure reading."
+            "description": "A maganize for leisure reading."
         },
         "remote_control": {
             "name": "remote_control",

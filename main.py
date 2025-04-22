@@ -8,6 +8,8 @@ from npc_manager import NPCManager
 from AI_thinking import AIThinking
 import threading
 from save_data import save_game_data  # 匯入存檔功能
+from NPC_move import move_npc_to_item, move_npc_to_space  # 新增：引入 NPC 移動功能
+import math
 
 pygame.init()
 pygame.font.init()
@@ -22,6 +24,7 @@ yellow = (255, 255, 0)
 brown = (165, 42, 42)
 blue = (0, 0, 255)  # 新增藍色，用於門的顏色
 
+# 在 pygame.init() 之後、主循環之前新增以下函數
 def show_map_selection():
     map_selection_running = True
     map_screen = pygame.display.set_mode((600, 400))
@@ -125,9 +128,15 @@ elif "spaces" in map_data:
     space_size = {}
     for idx, space in enumerate(map_data["spaces"]):
         name = space["name"]
-        # 預設座標與大小（可根據 idx 或自訂）
-        space_positions[name] = [100 + idx * 100, 100 + idx * 50]
-        space_size[name] = [200, 150]
+        # 優先使用 json 內的 position 欄位，否則 fallback 用 idx
+        if "position" in space:
+            space_positions[name] = list(space["position"])
+        else:
+            space_positions[name] = [100 + idx * 100, 100 + idx * 50]
+        if "size" in space:
+            space_size[name] = list(space["size"])
+        else:
+            space_size[name] = [200, 150]
 else:
     raise KeyError("地圖文件缺少 'space_positions'/'space_size' 或 'spaces' 欄位，無法初始化地圖。")
 
@@ -158,96 +167,6 @@ ai_thinking = AIThinking(
 
 original_caption = "AI NPC Simulation System"  # 更改為英文標題
 
-# 在 pygame.init() 之後、主循環之前新增以下函數
-def show_map_selection():
-    map_selection_running = True
-    map_screen = pygame.display.set_mode((600, 400))
-    pygame.display.set_caption("Map Selection")
-
-    # 確定地圖資料夾路徑
-    maps_dir = os.path.join(os.path.dirname(__file__), "worlds", "maps")
-    default_map_path = os.path.join(maps_dir, "map.json")
-
-    # 創建資料夾如果不存在
-    if not os.path.exists(maps_dir):
-        os.makedirs(maps_dir)
-        # 如果是新創建的資料夾，把預設地圖複製進去作為第一個選項
-        if os.path.exists(default_map_path):
-            import shutil
-            shutil.copy(default_map_path, os.path.join(maps_dir, "default_map.json"))
-
-    # 獲取所有可用地圖
-    available_maps = [f for f in os.listdir(maps_dir) if f.endswith('.json')]
-    available_map_paths = [os.path.join(maps_dir, f) for f in available_maps]
-    # 加入預設地圖選項（如果不是已經在列表裡）
-    if os.path.exists(default_map_path) and "map.json" not in available_maps:
-        available_maps.insert(0, "map.json")
-        available_map_paths.insert(0, default_map_path)
-
-    # 如果沒有找到地圖文件
-    if not available_maps:
-        font = pygame.font.SysFont("arial", 20, bold=True)
-        map_screen.fill(white)
-        text = font.render("No maps found. Using default map.", True, (255, 0, 0))
-        map_screen.blit(text, (150, 180))
-        pygame.display.flip()
-        pygame.time.wait(2000)
-        return default_map_path
-
-    # 計算按鈕位置與大小
-    button_width = 400
-    button_height = 50
-    button_margin = 10
-    button_start_y = 50
-
-    # 定義返回按鈕
-    back_button_rect = pygame.Rect(250, 350, 100, 40)
-
-    # 建立地圖按鈕列表
-    map_buttons = []
-    for i, map_name in enumerate(available_maps):
-        map_buttons.append({
-            'name': map_name,
-            'rect': pygame.Rect(100, button_start_y + i * (button_height + button_margin), button_width, button_height),
-            'hover': False,
-            'path': available_map_paths[i]
-        })
-
-    selected_map_path = available_map_paths[0]  # 預設值
-
-    while map_selection_running:
-        map_screen.fill(white)
-        # 標題
-        title_font = pygame.font.SysFont("arial", 32, bold=True)
-        title = title_font.render("Select a Map", True, black)
-        title_rect = title.get_rect(center=(300, 25))
-        map_screen.blit(title, title_rect)
-        # 滑鼠位置
-        mouse_pos = pygame.mouse.get_pos()
-        # 繪製地圖按鈕
-        for btn in map_buttons:
-            btn['hover'] = btn['rect'].collidepoint(mouse_pos)
-            color = (180, 180, 255) if btn['hover'] else (220, 220, 220)
-            pygame.draw.rect(map_screen, color, btn['rect'], border_radius=10)
-            pygame.draw.rect(map_screen, (0,0,0), btn['rect'], width=2, border_radius=10)
-            font = pygame.font.SysFont("arial", 20, bold=True)
-            text = font.render(btn['name'], True, (0,0,0))
-            text_rect = text.get_rect(center=btn['rect'].center)
-            map_screen.blit(text, text_rect)
-        # 處理事件
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                for btn in map_buttons:
-                    if btn['rect'].collidepoint(event.pos):
-                        selected_map_path = btn['path']
-                        map_selection_running = False
-                        break
-        pygame.display.flip()
-    return selected_map_path
-
 # 使用可調整大小的視窗
 window_size = [1500, 800]  # 初始視窗大小
 screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
@@ -273,43 +192,10 @@ def check_input_method():
 
 # 從 map.json 載入空間資料
 # default_map_path = os.path.join(os.path.dirname(__file__), "worlds", "maps", "map.json")
-
-# 顯示地圖選擇介面，獲取選擇的地圖路徑
-# selected_map_path = show_map_selection()
-
-# 檢查選擇的地圖文件是否存在
-# if not os.path.exists(selected_map_path):
-#     print(f"找不到地圖文件: {selected_map_path}，使用默認地圖")
-#     selected_map_path = default_map_path
-
-# 如果默認地圖也不存在，拋出錯誤
-# if not os.path.exists(selected_map_path):
-#     raise FileNotFoundError(f"找不到地圖文件，請確保地圖文件存在: {selected_map_path}")
-
-# 顯示使用的地圖路徑
-# print(f"使用地圖: {selected_map_path}")
-
-try:
-    # with open(selected_map_path, "r", encoding="utf-8") as f:
-    #     raw_data = f.read()
-    #     map_data = json.loads(raw_data)
-    pass
-except (FileNotFoundError, json.JSONDecodeError) as e:
-    raise RuntimeError(f"無法讀取或解析地圖文件: {e}")
-
-# 檢查 map.json 是否包含 space_positions、space_size 和 space_colors 鍵
-# if "space_positions" not in map_data or "space_size" not in map_data or "space_colors" not in map_data:
-#     raise KeyError("map.json 文件中缺少 'space_positions'、'space_size' 或 'space_colors' 鍵，請檢查文件內容是否正確。")
-
+# with open(default_map_path, "r", encoding="utf-8") as f:
+#     map_data = json.load(f)
 # space_positions = {name: list(pos) for name, pos in map_data["space_positions"].items()}
 # space_size = {name: list(size) for name, size in map_data["space_size"].items()}
-# space_colors = {name: list(color) for name, color in map_data["space_colors"].items()}
-
-# 從 map.json 載入門的資料
-# doors = {name: data for name, data in map_data["space_positions"].items() if "door_" in name}
-# door_sizes = {
-#     name: list(map_data["space_size"][data["direction"]]) for name, data in doors.items()
-# }
 
 # 顏色
 # white = (255, 255, 255)
@@ -592,6 +478,7 @@ save_button_rect = pygame.Rect(window_size[0] - 440, window_size[1] - 50, 100, 4
 # 存檔檔名輸入框狀態
 inputting_save_filename = False
 save_filename_input = ""
+save_filename_canceled = False
 
 # 繪製繼續按鈕
 def draw_continue_button(screen):
@@ -786,6 +673,9 @@ def draw_fps(screen, clock):
     screen.blit(fps_text, (20, 15))
 
 # 主迴圈
+auto_move_enabled = True  # 預設啟用自動移動
+last_target_item = None   # 記錄上一次自動移動的目標
+last_target_space = None  # 記錄上一次自動移動的空間
 running = True
 npc_pos = [150, 150]  # NPC 初始位置
 npc_speed = 3  # NPC 移動速度
@@ -796,6 +686,10 @@ current_item = "None"  # 初始化當前物品
 
 interaction_history = []
 
+# --- 新增：NPC 空間移動動畫狀態 ---
+npc_move_target_pos = None  # 目標座標
+npc_move_target_space = None  # 目標空間名稱
+
 while running:
     try:
         ai_thinking.npc = npc_manager.selected_npc
@@ -805,6 +699,7 @@ while running:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if button_rect.collidepoint(event.pos):  # 檢查是否點擊了退出按鈕
                     running = False
+
                 elif record_button_rect.collidepoint(event.pos):  # 檢查是否點擊了紀錄按鈕
                     show_interaction_history()
                 elif continue_button_rect.collidepoint(event.pos):  # 檢查是否點擊了繼續按鈕
@@ -813,20 +708,30 @@ while running:
                             ai_thinking.npc = npc_manager.selected_npc
                             ai_thinking.thinking = True
                             threading.Thread(target=ai_thinking._think_action, daemon=True).start()
+                
                 elif save_button_rect.collidepoint(event.pos):  # 檢查是否點擊了存檔按鈕
                     inputting_save_filename = True  # 開始輸入檔名
-                elif npc_manager.handle_click(event.pos):
+                    save_filename_input = ""    # 初始化輸入的檔名
+                    save_filename_canceled = False
+
+                elif npc_manager.handle_click(event.pos):   # 檢查是否點擊了 NPC
                     ai_thinking.npc = npc_manager.selected_npc
-            elif event.type == pygame.KEYDOWN and inputting_save_filename:
+                    
+            elif event.type == pygame.KEYDOWN and inputting_save_filename:  # 檢查是否正在輸入存檔名稱
                 if event.key == pygame.K_RETURN:
                     if save_filename_input.strip():
                         save_game_data(npc_manager, [h for npc in npc_manager.npcs for h in getattr(npc, 'action_history', [])], interaction_history, filename=save_filename_input.strip())
                     inputting_save_filename = False
                     save_filename_input = ""
-                elif event.key == pygame.K_BACKSPACE:
-                    save_filename_input = save_filename_input[:-1]
+                    save_filename_canceled = False
+                elif event.key == pygame.K_ESCAPE:  # 新增：ESC 鍵取消
+                    inputting_save_filename = False
+                    save_filename_input = ""
+                    save_filename_canceled = True
+                elif event.key == pygame.K_BACKSPACE:  # 新增：Backspace 鍵刪除
+                    save_filename_input = save_filename_input[:-1]  # 刪除最後一個字元
                 else:
-                    if len(save_filename_input) < 32:
+                    if len(save_filename_input) < 32:  # 新增：限制字元數
                         save_filename_input += event.unicode
             elif event.type == pygame.VIDEORESIZE:  # 處理視窗大小調整事件
                 window_size = [event.w, event.h]
@@ -838,38 +743,57 @@ while running:
 
         # 處理鍵盤輸入
         keys = pygame.key.get_pressed()
-        if npc_manager.selected_npc:  # 確保有選中的 NPC
-            # 確保位置是列表
+        moved = False
+        if npc_manager.selected_npc:
             new_pos = list(npc_manager.selected_npc.position)
             if keys[pygame.K_w]:  # 按下 W 鍵向上移動
                 new_pos[1] -= npc_speed
-            if keys[pygame.K_s]:  # 按下 S 鍵向下移動
+                moved = True    # 設置 moved 為 True
+            if keys[pygame.K_s]:
                 new_pos[1] += npc_speed
-            if keys[pygame.K_a]:  # 按下 A 鍵向左移動
+                moved = True
+            if keys[pygame.K_a]:
                 new_pos[0] -= npc_speed
-            if keys[pygame.K_d]:  # 按下 D 鍵向右移動
+                moved = True
+            if keys[pygame.K_d]:
                 new_pos[0] += npc_speed
+                moved = True
+            if moved:
+                npc_rect = pygame.Rect(new_pos[0] - 15, new_pos[1] - 15, 30, 30)
+                wall_segments = draw_walls(screen)
+                if not check_wall_collision(npc_rect, wall_segments):
+                    npc_manager.move_selected_npc(new_pos)
+                auto_move_enabled = False  # 只要有手動移動就停用自動移動
 
-        # 用背景色填滿螢幕
-        screen.fill(white)
+        # === 修正：用 A* 路徑規劃並避開牆壁 ===
+        target_item = getattr(ai_thinking, "target_item", None)
+        target_space = getattr(ai_thinking, "target_space", None)
+        if npc_manager.selected_npc is not None and auto_move_enabled:
+            if target_space:
+                result = move_npc_to_space(
+                    npc_manager.selected_npc, target_space,
+                    space_positions, space_size, screen,
+                    speed=npc_speed, draw_callback=None, wall_segments=draw_walls(screen)
+                )
+                if result:
+                    print(f"[DEBUG] NPC 成功到達 {target_space}")
+                else:
+                    print(f"[DEBUG] NPC 無法到達 {target_space}（所有路徑都會撞牆）")
+                ai_thinking.target_space = None
+                auto_move_enabled = False
+            elif target_item:
+                move_npc_to_item(npc_manager.selected_npc, target_item, item_data, screen, speed=npc_speed)
 
-        # 繪製空間、門、牆壁、物品和 NPC
-        draw_spaces(screen)
-        draw_doors(screen)
-        wall_segments = draw_walls(screen)
-        draw_items(screen)
-
-        # 檢查牆壁碰撞
-        if npc_manager.selected_npc:
-            npc_rect = pygame.Rect(new_pos[0] - 15, new_pos[1] - 15, 30, 30)  # NPC 的矩形
-            if not check_wall_collision(npc_rect, wall_segments):
-                npc_manager.move_selected_npc(new_pos)  # 更新 NPC 位置
-
-        npc_manager.draw_all(screen)
+        # 檢查 AI 目標是否有變化
+        if (target_item and target_item != last_target_item) or (target_space and target_space != last_target_space):
+            auto_move_enabled = True
+            last_target_item = target_item
+            last_target_space = target_space
 
         # 更新互動歷史（檢測空間變更）
         previous_space = current_space
         current_space = "Unknown"
+        npc_pos = npc_manager.selected_npc.position if npc_manager.selected_npc else [0, 0]  # 用 NPC 物件位置
         for space_name, pos in space_positions.items():
             size = space_size.get(space_name, [0, 0])
             if pos[0] <= npc_pos[0] <= pos[0] + size[0] and pos[1] <= npc_pos[1] <= pos[1] + size[1]:
@@ -886,7 +810,15 @@ while running:
                 current_item = item_name
                 break
         if current_item != previous_item:
-            update_interaction_history("Item Contact", f"Contacted {current_item}")  # 直接使用英文
+            update_interaction_history("Item Contact", f"Contacted {current_item}")
+
+        # === 只刷新一次畫面，確保 NPC 不會被覆蓋 ===
+        screen.fill(white)
+        draw_spaces(screen)
+        draw_doors(screen)
+        wall_segments = draw_walls(screen)
+        draw_items(screen)
+        npc_manager.draw_all(screen)
 
         # 繪製退出按鈕和紀錄按鈕
         draw_exit_button(screen)
@@ -911,8 +843,7 @@ while running:
         # 更新顯示
         pygame.display.flip()
 
-        # 控制刷新率
-        clock.tick(FPS)
+        # 控制刷新率clock.tick(FPS)
         draw_fps(screen, clock)
     except Exception as e:
         print(f"發生錯誤: {e}")
