@@ -1,0 +1,530 @@
+{
+	"world_name": "神秘豪宅",
+	"description": "一座充滿謎團的古老豪宅，隱藏著許多秘密...",
+	"spaces": [
+	  {
+		"name": "living_room",
+		"space_positions":[8, 8],
+		"space_size":[507, 445],
+		"description": "一個優雅的客廳，陽光透過高大的窗戶灑落，使華麗的音樂盒閃閃發光。一面美麗的鏡子立在角落，為房間增添深度。",
+		"connected_spaces": ["kitchen","corridor"],
+		"items": [
+		  "remote_control",
+		  "maganize",
+		  "table_living_room",
+		  "sofa",
+		  "piano"
+		],
+		"npcs": ["arthur"]
+	  },
+	  {
+		"name": "living_room2",
+		"space_positions":[276, 453],
+		"space_size":[239, 305],
+		"description": "一個優雅的客廳，陽光透過高大的窗戶灑落，使華麗的音樂盒閃閃發光。一面美麗的鏡子立在角落，為房間增添深度。",
+		"connected_spaces": [],
+		"items": [
+		  
+		],
+		"npcs": ["arthur"]
+	  },
+	  {
+		"name": "study",
+		"space_positions":[523, 439],
+		"space_size":[323, 320],
+		"description": "一間舒適的書房，木製書架排列整齊。溫暖的燈光創造了完美的閱讀和寫作氛圍。桌上放著一本個人日記，書架上的一本古老書籍引起了你的注意。",
+		"connected_spaces": ["corridor"],
+		"items": [
+		  "pencil",
+		  "table_study",
+		  "bookshelf"
+		],
+		"npcs": []
+	  },
+	  {
+		"name": "kitchen",
+		"space_positions":[8, 461],
+		"space_size":[260, 298],
+		"description": "一個溫馨宜人的廚房，銅鍋從天花板上懸掛下來，陽光透過水槽上方的窗戶灑落。櫃檯上放著一本食譜，旁邊是一套精美的茶具，隨時可以使用。",
+		"connected_spaces": ["living_room"],
+		"items": [
+		  "knife",
+		  "sink",
+		  "refrigerator"
+		],
+		"npcs": []
+	  },
+	  {
+		"name": "bedroom",
+		"space_positions":[523, 8],
+		"space_size":[323, 320],
+		"description": "一個溫馨的臥室，舒適的床鋪和柔和的燈光創造了完美的休息氛圍。",
+		"connected_spaces": ["corridor"],
+		"items": [
+		  "bed",
+		  "pen",
+		  "diary",
+		  "table_bedroom"
+		],
+		"npcs": []
+	  },
+	  {
+		"name": "bathroom",
+		"space_positions":[854, 8],
+		"space_size":[270, 230],
+		"description": "一個整潔的浴室，白色瓷磚和明亮的燈光創造了清潔的氛圍。",
+		"connected_spaces": ["corridor"],
+		"items": [
+		  "bathtub",
+		  "shower"
+		],
+		"npcs": []
+	  },
+	  {
+		"name": "toilet",
+		"space_positions":[970, 246],
+		"space_size":[155, 184],
+		"description": "一個簡單的衛生間，白色瓷磚和明亮的燈光創造了清潔的氛圍。",
+		"connected_spaces": ["corridor"],
+		"items": [
+		  "tissue",
+		  "toilet"
+		],
+		"npcs": []
+	  },
+	  {
+		"name": "corridor",
+		"space_positions":[523, 336],
+		"space_size":[330, 94],
+		"description": "一個長長的走廊，白色牆壁和明亮的燈光創造了明亮的氛圍。",
+		"connected_spaces": [
+		  "living_room",
+		  "study",
+		  "bedroom",
+		  "balcony",
+		  "bathroom",
+		  "toilet"
+		],
+		"items": [],
+		"npcs": []
+	  },
+	  {
+		"name": "corridor2",
+		"space_positions":[854, 246],
+		"space_size":[108, 184],
+		"description": "一個長長的走廊，白色牆壁和明亮的燈光創造了明亮的氛圍。",
+		"connected_spaces": [],
+		"items": [],
+		"npcs": []
+	  },
+	  {
+		"name": "balcony",
+		"space_positions":[854, 439],
+		"space_size":[270, 320],
+		"description": "一個寬敞的陽台，綠意盎然的植物和明亮的燈光創造了舒適的氛圍。",
+		"connected_spaces": [
+		  "corridor"
+		],
+		"items": [],
+		"npcs": []
+	  }
+	],
+	"items": [
+	  {
+		"name": "remote_control",
+		"description": "一個黑色的遙控器，上面有多個按鈕，可以控制家中的電子設備。",
+		"position": [
+		  68,
+		  92
+		],
+		"direction": "none",
+		"size": [
+		  100,
+		  100
+		],
+		"interactions": {
+		  "press": null,
+		  "inspect": null
+		},
+		"properties": {
+		  "battery_level": 80
+		}
+	  },
+	  {
+		"name": "maganize",
+		"description": "一本雜誌，上面有許多有趣的圖片和故事。",
+		"position": [
+		  46,
+		  232
+		],
+		"direction": "none",
+		"size": [
+		  100,
+		  100
+		],
+		"interactions": {
+		  "read": null,
+		  "inspect": null
+		},
+		"properties": {
+		  "content": "在奇蹟的時代，當魔法仍然自由地流動於世界之中..."
+		}
+	  },
+	  {
+		"name": "table_living_room",
+		"description": "一個優雅的客廳桌子，上面放著一些小物品。",
+		"position": [
+		  240,
+		  178
+		],
+		"direction": "south",
+		"size": [
+		  250,
+		  250
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "sofa",
+		"description": "一個舒適的沙發，上面放著一些小物品。",
+		"position": [
+		  300,
+		  225
+		],
+		"direction": "west",
+		"size": [
+		  250,
+		  250
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "piano",
+		"description": "一個優雅的鋼琴，上面放著一些小物品。",
+		"position": [
+		  489,
+		  100
+		],
+		"direction": "west",
+		"size": [
+		  250,
+		  250
+		],
+		"interactions": {
+		  "play": null,
+		  "inspect": null
+		},
+		"properties": {
+		  "is_playing": false
+		}
+	  },
+	  {
+		"name": "table_study",
+		"description": "一個優雅的書房桌子，上面放著一些小物品。",
+		"position": [
+		  825,
+		  685
+		],
+		"direction": "east",
+		"size": [
+		  250,
+		  250
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "bookshelf",
+		"description": "一個精緻的書架，上面放著一些小物品。",
+		"position": [
+		  571,
+		  721
+		],
+		"direction": "east",
+		"size": [
+		  200,
+		  250
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "pencil",
+		"description": "一個精緻的鉛筆，非常適合寫字。",
+		"position": [
+		  825,
+		  652
+		],
+		"direction": "none",
+		"size": [
+		  50,
+		  50
+		],
+		"interactions": {
+		  "write": {
+			"content": "str"
+		  },
+		  "inspect": null
+		},
+		"properties": {
+		  "content": ""
+		}
+	  },
+	  {
+		"name": "knife",
+		"description": "一個精緻的刀，非常適合切菜。",
+		"position": [
+		  38,
+		  476
+		],
+		"direction": "none",
+		"size": [
+		  100,
+		  40
+		],
+		"interactions": {
+		  "cut": {
+			"ingredient": "str"
+		  },
+		  "inspect": null
+		},
+		"properties": {
+		  "is_sharpened": false
+		}
+	  },
+	  {
+		"name": "sink",
+		"description": "一個精緻的水槽，非常適合清洗小物品。",
+		"position": [
+		  49,
+		  616
+		],
+		"direction": "east",
+		"size": [
+		  150,
+		  150
+		],
+		"interactions": {
+		  "clean": null,
+		  "inspect": null
+		},
+		"properties": {
+		  "is_clean": true
+		}
+	  },
+	  {
+		"name": "refrigerator",
+		"description": "一個精緻的冰箱，上面放著一些小物品。",
+		"position": [
+		  234,
+		  666
+		],
+		"direction": "west",
+		"size": [
+		  200,
+		  250
+		],
+		"interactions": {
+		  "open": null,
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "bed",
+		"description": "一個精緻的床，上面放著一些小物品。",
+		"position": [
+		  641,
+		  133
+		],
+		"direction": "east",
+		"size": [
+		  300,
+		  200
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "diary",
+		"description": "一本皮革裝訂的日記，頁面鑲有金邊，準備記錄思想和回憶。",
+		"position": [
+		  790,
+		  123
+		],
+		"direction": "none",
+		"size": [
+		  100,
+		  100
+		],
+		"interactions": {
+		  "read": null,
+		  "write": {
+			"content": "str"
+		  },
+		  "inspect": null
+		},
+		"properties": {
+		  "content": ""
+		}
+	  },
+	  {
+		"name": "pen",
+		"description": "一個精緻的筆，非常適合寫字。",
+		"position": [
+		  567,
+		  234
+		],
+		"direction": "none",
+		"size": [
+		  50,
+		  50
+		],
+		"interactions": {
+		  "write": {
+			"content": "str"
+		  },
+		  "inspect": null
+		},
+		"properties": {
+		  "content": ""
+		}
+	  },
+	  {
+		"name": "table_bedroom",
+		"description": "一個精緻的床，上面放著一些小物品。",
+		"position": [
+		  838,
+		  137
+		],
+		"direction": "west",
+		"size": [
+		  250,
+		  250
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "bathtub",
+		"description": "一個精緻的浴缸，上面放著一些小物品。",
+		"position": [
+		  1094,
+		  133
+		],
+		"direction": "west",
+		"size": [
+		  200,
+		  150
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "shower",
+		"description": "一個精緻的淋浴，上面放著一些小物品。",
+		"position": [
+		  1090,
+		  197
+		],
+		"direction": "west",
+		"size": [
+		  150,
+		  250
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "tissue",
+		"description": "一包精緻的衛生紙，非常適合使用。",
+		"position": [
+		  1108,
+		  249
+		],
+		"direction": "none",
+		"size": [
+		  100,
+		  100
+		],
+		"interactions": {
+		  "use": null,
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "toilet",
+		"description": "一個精緻的廁所，上面放著一些小物品。",
+		"position": [
+		  1084,
+		  290
+		],
+		"direction": "east",
+		"size": [
+		  150,
+		  150
+		],
+		"interactions": {
+		  "inspect": null
+		},
+		"properties": {}
+	  },
+	  {
+		"name": "book",
+		"description": "A book for reading.",
+		"position": [
+		  571,
+		  721
+		],
+		"direction": "none",
+		"size": [
+		  80,
+		  80
+		],
+		"interactions": {
+		  "read": null,
+		  "inspect": null
+		},
+		"properties": {
+		  "content": ""
+		}
+	  }
+	],
+	"npcs": [
+	  {
+		"name": "arthur",
+		"description": "一位好奇且思考深入的探險家，對發掘故事和謎團有濃厚興趣。",
+		"starting_space": "living_room",
+		"inventory": [],
+		"history": [
+		  {
+			"role": "system",
+			"content": "你是亞瑟，一位好奇的探險家，發現自己身處一座引人入勝的房子。\n你可以：\n- 探索不同的房間\n- 與你找到的物品互動\n- 如果找到日記，記錄你的想法\n- 享受音樂盒的音樂\n\n你特別感興趣的是：\n- 記下你的觀察和感受\n- 理解你找到的物品背後的故事\n- 用音樂創造平靜的氛圍\n\n慢慢探索並與周圍環境互動。"
+		  },
+		  {
+			"role": "assistant",
+			"content": "我發現自己在這座有趣的房子裡。我應該探索並與我發現的東西互動。我想探索其他空間"
+		  }
+		]
+	  }
+	]
+  }

@@ -1,0 +1,404 @@
+{
+  "world_name": "神秘豪宅",
+  "description": "一座充滿謎團的古老豪宅，隱藏著許多秘密...",
+  "spaces": [
+    {
+      "name": "living_room",
+      "description": "一個優雅的客廳，陽光透過高大的窗戶灑落，使華麗的音樂盒閃閃發光。一面美麗的鏡子立在角落，為房間增添深度。",
+      "connected_spaces": [
+        "kitchen",
+        "corridor"
+      ],
+      "items": [
+        "remote_control",
+        "maganize",
+        "table_living_room",
+        "sofa",
+        "piano"
+      ]
+    },
+    {
+      "name": "study",
+      "description": "一間舒適的書房，木製書架排列整齊。溫暖的燈光創造了完美的閱讀和寫作氛圍。桌上放著一本個人日記，書架上的一本古老書籍引起了你的注意。",
+      "connected_spaces": [
+        "corridor"
+      ],
+      "items": [
+        "pencil",
+        "table_study",
+        "bookshelf"
+      ]
+    },
+    {
+      "name": "kitchen",
+      "description": "一個溫馨宜人的廚房，銅鍋從天花板上懸掛下來，陽光透過水槽上方的窗戶灑落。櫃檯上放著一本食譜，旁邊是一套精美的茶具，隨時可以使用。",
+      "connected_spaces": [
+        "living_room"
+      ],
+      "items": [
+        "knife",
+        "sink",
+        "refrigerator"
+      ]
+    },
+    {
+      "name": "corridor",
+      "description": "一個寬敞的走廊，牆上掛著一幅古老的畫作。一扇門通向一個寧靜的石凳。一個銅製澆水壺放在一旁，隨時可以照料植物。",
+      "connected_spaces": [
+        "living_room",
+        "study",
+        "bedroom",
+        "balcony",
+        "bathroom",
+        "toilet"
+      ],
+      "items": [
+        
+      ]
+    },
+    {
+      "name": "bedroom",
+      "description": "一個寬敞的臥室，灰塵在小圓窗透進的光束中飛舞。一個舊木箱放在角落，而一個黃銅望遠鏡立在窗邊，指向天空。",
+      "connected_spaces": [
+        "corridor"
+      ],
+      "items": [
+        "bed",
+        "pen",
+        "diary",
+        "table_bedroom"
+      ]
+    },
+    {
+      "name": "bathroom",
+      "description": "一個光線昏暗的浴室。",
+      "connected_spaces": [
+        "corridor"
+      ],
+      "items": [
+        "bathtub",
+        "shower"
+      ]
+    },
+    {
+      "name": "toilet",
+      "description": "一個光線昏暗的廁所",
+      "connected_spaces": [
+        "corridor"
+      ],
+      "items": [
+        "tissue",
+        "toilet"
+      ]
+    },
+    {
+      "name": "balcony",
+      "description": "一個寬敞的陽台，可以欣賞到美景。",
+      "connected_spaces": [
+        "corridor"
+      ],
+      "items": [
+
+      ]
+    }
+  ],
+  "items": [
+    {
+      "name": "remote_control",
+      "description": "一個黑色的遙控器，上面有多個按鈕，可以控制家中的電子設備。",
+      "interactions": {
+        "press": null,
+        "inspect": null
+      },
+      "properties": {
+        "battery_level": 80
+      }
+    },
+    {
+      "name": "maganize",
+      "description": "一本雜誌，上面有許多有趣的圖片和故事。",
+      "interactions": {
+        "read": null,
+        "inspect": null
+      },
+      "properties": {
+        "content": "在奇蹟的時代，當魔法仍然自由地流動於世界之中..."
+      }
+    },
+    {
+      "name": "table_living_room",
+      "description": "一個優雅的客廳桌子，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "sofa",
+      "description": "一個舒適的沙發，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "piano",
+      "description": "一個優雅的鋼琴，上面放著一些小物品。",
+      "interactions": {
+        "play": null,
+        "inspect": null
+      },
+      "properties": {
+        "is_playing": false
+      }
+    },
+    {
+      "name": "table_study",
+      "description": "一個優雅的書房桌子，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "bookshelf",
+      "description": "一個精緻的書架，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "pencil",
+      "description": "一個精緻的鉛筆，非常適合寫字。",
+      "interactions": {
+        "write": {
+          "content": "str"
+        },
+        "inspect": null
+      },
+      "properties": {
+        "content": ""
+      }
+    },
+    {
+      "name": "knife",
+      "description": "一個精緻的刀，非常適合切菜。",
+      "interactions": {
+        "cut": {
+          "ingredient": "str"
+        },
+        "inspect": null
+      },
+      "properties": {
+        "is_sharpened": false
+      }
+    },
+    {
+      "name": "sink",
+      "description": "一個精緻的水槽，非常適合清洗小物品。",
+      "interactions": {
+        "clean": null,
+        "inspect": null
+      },
+      "properties": {
+        "is_clean": true
+      }
+    },
+    {
+      "name": "refrigerator",
+      "description": "一個精緻的冰箱，上面放著一些小物品。",
+      "interactions": {
+        "open": null,
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "bed",
+      "description": "一個精緻的床，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "diary",
+      "description": "一本皮革裝訂的日記，頁面鑲有金邊，準備記錄思想和回憶。",
+      "interactions": {
+        "read": null,
+        "write": {
+          "content": "str"
+        },
+        "inspect": null
+      },
+      "properties": {
+        "content": ""
+      }
+    },
+    {
+      "name": "pen",
+      "description": "一個精緻的筆，非常適合寫字。",
+      "interactions": {
+        "write": {
+          "content": "str"
+        },
+        "inspect": null
+      },
+      "properties": {
+        "content": ""
+      }
+    },
+    {
+      "name": "table_bedroom",
+      "description": "一個精緻的床，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "bathtub",
+      "description": "一個精緻的浴缸，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "shower",
+      "description": "一個精緻的淋浴，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "tissue",
+      "description": "一包精緻的衛生紙，非常適合使用。",
+      "interactions": {
+        "use": null,
+        "inspect": null
+      },
+      "properties": {}
+    },
+    {
+      "name": "toilet",
+      "description": "一個精緻的廁所，上面放著一些小物品。",
+      "interactions": {
+        "inspect": null
+      },
+      "properties": {}
+    }
+  ],
+  "npcs": [
+    {
+      "name": "arthur",
+      "description": "一位好奇且思考深入的探險家，對發掘故事和謎團有濃厚興趣。",
+      "starting_space": "study",
+      "inventory": [],
+      "history": [
+        {
+          "role": "system",
+          "content": "你是亞瑟，一位好奇的探險家，發現自己身處一座引人入勝的房子。\n你可以：\n- 探索不同的房間\n- 與你找到的物品互動\n- 如果找到日記，記錄你的想法\n- 享受音樂盒的音樂\n\n你特別感興趣的是：\n- 記下你的觀察和感受\n- 理解你找到的物品背後的故事\n- 用音樂創造平靜的氛圍\n\n慢慢探索並與周圍環境互動。"
+        },
+        {
+          "role": "assistant",
+          "content": "我發現自己在這座有趣的房子裡。我應該探索並與我發現的東西互動。我想探索其他空間"
+        },
+        {
+          "role": "system",
+          "content": "Space Name: living_room\nDescription: 一個優雅的客廳，陽光透過高大的窗戶灑落，使華麗的音樂盒閃閃發光。一面美麗的鏡子立在角落，為房間增添深度。\nConnected Spaces: kitchen, garden, basement, study_room\nItems in Space: music_box, mirror\nNPCs in Space: arthur"
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: 客廳裡有一個音樂盒，這樣的物品總讓我感到好奇，它可能帶有一段故事或製作者的意圖。"
+        },
+        {
+          "role": "assistant",
+          "content": "Action: I'm interacting with music_box using 'inspect'"
+        },
+        {
+          "role": "system",
+          "content": "You inspect the music_box: 一個裝飾著舞蹈人物的華麗音樂盒，能夠播放迷人的旋律。"
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: 音樂盒通常具有深厚的背景故事或制作人的巧妙設計，我希望更深入了解它。"
+        },
+        {
+          "role": "assistant",
+          "content": "Action: I'm interacting with music_box using 'play'"
+        },
+        {
+          "role": "system",
+          "content": "You start playing the music_box."
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: The music box begins to play, filling the room with its enchanting melody. I want to observe how the sound and environment interact."
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: 音樂盒的旋律可能能啟發更多的沉思，或者帶出新的發現。"
+        },
+        {
+          "role": "assistant",
+          "content": "Action: I'm interacting with music_box using 'inspect'"
+        },
+        {
+          "role": "system",
+          "content": "You inspect the music_box: 一個裝飾著舞蹈人物的華麗音樂盒，能夠播放迷人的旋律。"
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: 這個音樂盒確實非常迷人，但我已經檢查過它了。現在我更感興趣的是探索這個房間或通過這些事物體會這裏的氛圍。"
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: I should explore more areas to uncover the secrets of this house."
+        },
+        {
+          "role": "assistant",
+          "content": "Action: I'm moving to study_room"
+        },
+        {
+          "role": "system",
+          "content": "Space Name: study_room\nDescription: 一間舒適的書房，木製書架排列整齊。溫暖的燈光創造了完美的閱讀和寫作氛圍。桌上放著一本個人日記，書架上的一本古老書籍引起了你的注意。\nConnected Spaces: living_room, attic\nItems in Space: personal_diary, ancient_book\nNPCs in Space: arthur"
+        },
+        {
+          "role": "system",
+          "content": "Moved to study_room.\nSpace Name: study_room\nDescription: 一間舒適的書房，木製書架排列整齊。溫暖的燈光創造了完美的閱讀和寫作氛圍。桌上放著一本個人日記，書架上的一本古老書籍引起了你的注意。\nConnected Spaces: living_room, attic\nItems in Space: personal_diary, ancient_book\nNPCs in Space: arthur"
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: 書房藴藏了知識與故事，這裡的物品令人著迷，特別是那本日記和古老的書籍。我決定與它們進一步互動。"
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: 我對日記內容感到好奇，想了解某人過去的生活。"
+        },
+        {
+          "role": "assistant",
+          "content": "Action: I'm interacting with personal_diary using 'read'"
+        },
+        {
+          "role": "system",
+          "content": "You read the personal_diary: 親愛的日記，今天我開始了在這個神秘地方的旅程..."
+        },
+        {
+          "role": "assistant",
+          "content": "Thinking: I want to analyze the narrative of the diary and the emotions conveyed within."
+        },
+        {
+          "role": "assistant",
+          "content": "Action: I'm interacting with personal_diary using 'write' with parameter: 我也開始了一段探索與沉思的旅程。"
+        },
+        {
+          "role": "system",
+          "content": "You wrote in the personal_diary: 我也開始了一段探索與沉思的旅程。"
+        }
+      ]
+    }
+  ]
+}

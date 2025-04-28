@@ -1,0 +1,284 @@
+{
+    "items": {
+        "maganize": {
+            "name": "maganize",
+            "position": [
+                46,
+                232
+            ],
+            "type": "reading_material",
+            "description": "A maganize for leisure reading.",
+            "direction": "none",
+            "size": [
+                100,
+                100
+            ]
+        },
+        "remote_control": {
+            "name": "remote_control",
+            "position": [
+                68,
+                92
+            ],
+            "type": "electronics",
+            "description": "A remote control for operating devices.",
+            "direction": "none",
+            "size": [
+                100,
+                100
+            ]
+        },
+        "sofa": {
+            "name": "sofa",
+            "position": [
+                300,
+                225
+            ],
+            "type": "furniture",
+            "description": "A comfortable sofa for sitting.",
+            "direction": "west",
+            "size": [
+                250,
+                250
+            ]
+        },
+        "piano": {
+            "name": "piano",
+            "position": [
+                489,
+                100
+            ],
+            "type": "instrument",
+            "description": "A piano for playing music.",
+            "direction": "west",
+            "size": [
+                250,
+                250
+            ]
+        },
+        "refrigerator": {
+            "name": "refrigerator",
+            "position": [
+                234,
+                666
+            ],
+            "type": "appliance",
+            "description": "A refrigerator to store food.",
+            "direction": "west",
+            "size": [
+                200,
+                250
+            ]
+        },
+        "knife": {
+            "name": "knife",
+            "position": [
+                38,
+                476
+            ],
+            "type": "kitchen_tool",
+            "description": "A sharp knife for cutting.",
+            "direction": "none",
+            "size": [
+                100,
+                40
+            ]
+        },
+        "sink": {
+            "name": "sink",
+            "position": [
+                49,
+                616
+            ],
+            "type": "kitchen_tool",
+            "description": "A sink for washing dishes.",
+            "direction": "east",
+            "size": [
+                150,
+                150
+            ]
+        },
+        "diary": {
+            "name": "diary",
+            "position": [
+                790,
+                123
+            ],
+            "type": "stationery",
+            "description": "A diary for writing personal notes.",
+            "direction": "none",
+            "size": [
+                100,
+                100
+            ]
+        },
+        "pen": {
+            "name": "pen",
+            "position": [
+                567,
+                234
+            ],
+            "type": "stationery",
+            "description": "A pen for writing.",
+            "direction": "none",
+            "size": [
+                50,
+                50
+            ]
+        },
+        "book": {
+            "name": "book",
+            "position": [
+                571,
+                721
+            ],
+            "type": "reading_material",
+            "description": "A book for reading.",
+            "direction": "none",
+            "size": [
+                80,
+                80
+            ]
+        },
+        "bookshelf": {
+            "name": "bookshelf",
+            "position": [
+                571,
+                721
+            ],
+            "type": "furniture",
+            "description": "A bookshelf to store books.",
+            "direction": "east",
+            "size": [
+                200,
+                250
+            ]
+        },
+        "pencil": {
+            "name": "pencil",
+            "position": [
+                825,
+                652
+            ],
+            "type": "stationery",
+            "description": "A pencil for drawing or writing.",
+            "direction": "none",
+            "size": [
+                50,
+                50
+            ]
+        },
+        "bed": {
+            "name": "bed",
+            "position": [
+                641,
+                133
+            ],
+            "type": "furniture",
+            "description": "A bed for sleeping.",
+            "direction": "east",
+            "size": [
+                300,
+                200
+            ]
+        },
+        "bathtub": {
+            "name": "bathtub",
+            "position": [
+                1094,
+                133
+            ],
+            "type": "bathroom_fixture",
+            "description": "A bathtub for bathing.",
+            "direction": "west",
+            "size": [
+                200,
+                150
+            ]
+        },
+        "shower": {
+            "name": "shower",
+            "position": [
+                1090,
+                197
+            ],
+            "type": "bathroom_fixture",
+            "description": "A shower for bathing.",
+            "direction": "west",
+            "size": [
+                150,
+                250
+            ]
+        },
+        "tissue": {
+            "name": "tissue",
+            "position": [
+                1108,
+                249
+            ],
+            "type": "hygiene",
+            "description": "A box of tissues.",
+            "direction": "none",
+            "size": [
+                100,
+                100
+            ]
+        },
+        "toilet": {
+            "name": "toilet",
+            "position": [
+                1084,
+                290
+            ],
+            "type": "bathroom_fixture",
+            "description": "A toilet for sanitation.",
+            "direction": "east",
+            "size": [
+                150,
+                150
+            ]
+        },
+        "table_living_room": {
+            "name": "table_living_room",
+            "position": [
+                240,
+                178
+            ],
+            "type": "furniture",
+            "description": "A table in the living room.",
+            "direction": "south",
+            "size": [
+                250,
+                250
+            ]
+        },
+        "table_bedroom": {
+            "name": "table_bedroom",
+            "position": [
+                838,
+                137
+            ],
+            "type": "furniture",
+            "description": "A table in the bedroom.",
+            "direction": "west",
+            "size": [
+                250,
+                250
+            ]
+        },
+        "table_study": {
+            "name": "table_study",
+            "position": [
+                825,
+                685
+            ],
+            "type": "furniture",
+            "description": "A study table in the study room.",
+            "direction": "east",
+            "size": [
+                250,
+                250
+            ]
+        }
+    }
+}
