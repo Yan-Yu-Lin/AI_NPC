@@ -2,15 +2,16 @@ import pygame
 import threading
 from NPC_move import move_npc_to_item
 import math
+import os
 
 def run_pygame_demo(world):
     pygame.init()
     # 使用 RESIZABLE 讓視窗可調整大小
-    screen = pygame.display.set_mode((1000, 700), pygame.RESIZABLE)
+    screen = pygame.display.set_mode((1200, 700), pygame.RESIZABLE)  # 增加初始寬度以容納右側資訊欄
     pygame.display.set_caption("AI NPC World Demo")
-    font = pygame.font.Font("pygame/msjh.ttf", 22)
-    info_font = pygame.font.Font("pygame/msjh.ttf", 18)
-    button_font = pygame.font.Font("pygame/msjh.ttf", 20)
+    font = pygame.font.Font("fonts/msjh.ttf", 22)
+    info_font = pygame.font.Font("fonts/msjh.ttf", 18)
+    button_font = pygame.font.Font("fonts/msjh.ttf", 20)
     clock = pygame.time.Clock()
     running = True
 
@@ -44,6 +45,7 @@ def run_pygame_demo(world):
     default_layout = True
     item_positions = {}
     item_sizes = {}
+
     if "map_data" in world:
         map_data = world["map_data"]
         space_positions = map_data.get("space_positions", {})
@@ -67,7 +69,7 @@ def run_pygame_demo(world):
         npc.radius = 24
 
     # 記錄原始地圖最大寬高（用於縮放）
-    map_w = max([pos[0]+size[0] for pos, size in zip([s.display_pos for s in spaces], [s.display_size for s in spaces])] or [1000])
+    map_w = max([pos[0]+size[0] for pos, size in zip([s.display_pos for s in spaces], [s.display_size for s in spaces])] or [1200])
     map_h = max([pos[1]+size[1] for pos, size in zip([s.display_pos for s in spaces], [s.display_size for s in spaces])] or [700])
 
     active_npc = npcs[0] if npcs else None  # 預設主控第一個 NPC

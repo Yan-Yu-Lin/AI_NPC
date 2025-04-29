@@ -63,17 +63,19 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
     # 第一步: 創建所有空間（不含連接）
     for space_data in world_data.get("spaces", []):
         spaces_dict[space_data["name"]] = Space(
-            name=space_data["name"],
-            description=space_data["description"],
-            connected_spaces=[],  # 後續連接
-            items=[],  # 後續添加物品
-            npcs=[]  # 後續添加 NPC
+            name = space_data["name"],
+            description = space_data["description"],
+            connected_spaces = [],  # 後續連接
+            items = [],  # 後續添加物品
+            npcs = [],  # 後續添加 NPC
+            display_pos = tuple(space_data["space_positions"]),
+            display_size = tuple(space_data["space_size"])
         )
         # 收集地圖資訊
-        if "space_positions" in space_data and "space_size" in space_data:
-            space_positions[space_data["name"]] = space_data["space_positions"]
-            space_sizes[space_data["name"]] = space_data["space_size"]
-    
+        # if "space_positions" in space_data and "space_size" in space_data:
+        #     space_positions[space_data["name"]] = space_data["space_positions"]
+        #     space_sizes[space_data["name"]] = space_data["space_size"]
+
     # 第二步: 創建所有物品
     for item_data in world_data.get("items", []):
         items_dict[item_data["name"]] = Item(
@@ -166,7 +168,7 @@ def list_available_worlds():
         print("Creating 'worlds' directory...")
         os.makedirs("worlds")
         return []
-    
+
     # Get all JSON files in the worlds directory
     world_files = glob.glob(os.path.join("worlds", "*.json"))
     

@@ -9,7 +9,7 @@ def pygame_map_selection(maps_dir='worlds/maps'):
     width, height = int(info.current_w * 0.95), int(info.current_h * 0.95)
     screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
     pygame.display.set_caption("選擇地圖")
-    font = pygame.font.Font("pygame/msjh.ttf", 48)
+    font = pygame.font.Font("fonts/msjh.ttf", 48)
     button_font = pygame.font.SysFont("arial", 36)
     clock = pygame.time.Clock()
     map_files = glob.glob(f"{maps_dir}/*.json")

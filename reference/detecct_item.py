@@ -11,7 +11,7 @@ def detect_items_in_space(space_name: str, save_data: dict) -> List[Dict[str, An
     """
     根據 new_save.json 的格式，取得指定空間內所有物品的詳細資料
     """
-    save_data = load_save_data("worlds/new_save.json")     # 載入 save_data
+    save_data = load_save_data("../worlds/new_save.json")     # 載入 save_data
     # 找到該空間
     space = next((s for s in save_data["spaces"] if s["name"] == space_name), None)
     if not space or "items" not in space:   # 如果沒有該空間或該空間沒有物品
