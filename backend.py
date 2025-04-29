@@ -650,7 +650,7 @@ def SandBox():
     list_of_NPC = xxx
     list_of_space = xxx
     list_of_items = xxx
-    function_from_front_end_initalize(list_of_NPC, list_of_items, list_of_space)
+    pygame_display.initializedraw(list_of_NPC, list_of_items, list_of_space)
 
     # 初始化 AI_System 並設置為全局變量
     world_system = AI_System(
