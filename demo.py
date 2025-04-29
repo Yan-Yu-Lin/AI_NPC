@@ -6,7 +6,6 @@ import os
 import glob
 
 client = OpenAI()
-
 # 設定全局變量使 NPC 類可以訪問
 world_system = None
 
@@ -21,6 +20,7 @@ class Item(BaseModel):
     # - If value is None: no parameters needed
     # - If value is dict: specifies required parameters and their types
     properties: Dict[str, Any] = {}
+
 
 
 #NOTE: Space 空間 class
@@ -646,12 +646,7 @@ def SandBox():
     world_file_path = select_world()
     world_data = load_world_from_json(world_file_path)
     world = build_world_from_data(world_data)
-
-    list_of_NPC = xxx
-    list_of_space = xxx
-    list_of_items = xxx
-    function_from_front_end_initalize(list_of_NPC, list_of_items, list_of_space)
-
+    
     # 初始化 AI_System 並設置為全局變量
     world_system = AI_System(
         time="中午",
