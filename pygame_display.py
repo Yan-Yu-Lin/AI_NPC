@@ -1,6 +1,5 @@
 import pygame
 import threading
-from NPC_move import move_npc_to_item
 import math
 import os
 
@@ -41,26 +40,10 @@ def run_pygame_demo(world):
     npcs = list(world["npcs"].values())
     items = list(world["items"].values())
 
-    # 嘗試從 world 取得地圖資訊（如果有）
-    default_layout = True
-    item_positions = {}
-    item_sizes = {}
-
-    if "map_data" in world:
-        map_data = world["map_data"]
-        space_positions = map_data.get("space_positions", {})
-        space_size = map_data.get("space_size", {})
-        item_positions = map_data.get("item_positions", {})
-        item_sizes = map_data.get("item_sizes", {})
-        for space in spaces:
-            if space.name in space_positions and space.name in space_size:
-                space.display_pos = tuple(space_positions[space.name])
-                space.display_size = tuple(space_size[space.name])
-                default_layout = False
-    if default_layout:
-        for idx, space in enumerate(spaces):
-            space.display_pos = (100 + (idx % 4) * 220, 100 + (idx // 4) * 220)
-            space.display_size = (180, 120)
+    # 不再需要 map_data，直接用物件屬性
+    # 計算原始地圖最大寬高（用於縮放）
+    map_w = max([s.display_pos[0]+s.display_size[0] for s in spaces if s.display_size and s.display_pos] or [1200])
+    map_h = max([s.display_pos[1]+s.display_size[1] for s in spaces if s.display_size and s.display_pos] or [700])
 
     # NPC 圓形顏色
     npc_colors = [(255,0,0),(0,128,255),(0,200,0),(200,0,200),(255,128,0)]
@@ -68,34 +51,17 @@ def run_pygame_demo(world):
         npc.display_color = npc_colors[idx % len(npc_colors)]
         npc.radius = 24
 
-    # 記錄原始地圖最大寬高（用於縮放）
-    map_w = max([pos[0]+size[0] for pos, size in zip([s.display_pos for s in spaces], [s.display_size for s in spaces])] or [1200])
-    map_h = max([pos[1]+size[1] for pos, size in zip([s.display_pos for s in spaces], [s.display_size for s in spaces])] or [700])
-
     active_npc = npcs[0] if npcs else None  # 預設主控第一個 NPC
     last_ai_result = ""
     ai_thinking = False
     ai_threading = None
     ai_running = False
 
-    def move_npc_to_item_callback(npc, item_name):
-        print(f"AI 要移動到物品: {item_name}")
-        if 'item_positions' in world.get('map_data', {}):
-            item_positions = world['map_data']['item_positions']
-        else:
-            item_positions = {}
-        print(f"可用物品座標: {list(item_positions.keys())}")
-        if item_name in item_positions:
-            npc.move_target = list(item_positions[item_name])
-            npc.move_speed = 6
-        else:
-            print(f"找不到物品 {item_name} 的座標，NPC 不會動。")
-
     def ai_process():
         nonlocal last_ai_result, ai_thinking, ai_running
         ai_running = True
         ai_thinking = True
-        last_ai_result = active_npc.process_tick(move_callback=move_npc_to_item_callback) if active_npc else ""
+        last_ai_result = active_npc.process_tick() if active_npc else ""
         ai_thinking = False
         ai_running = False
 
@@ -132,8 +98,14 @@ def run_pygame_demo(world):
 
         # 每次主循環都同步 display_pos 與 position，並推進動畫移動
         for npc in npcs:
+            # 如果 npc.position 尚未指定，給預設值 (0, 0)
+            if npc.position is None:
+                npc.position = [0, 0]
+            if npc.display_pos is None:
+                npc.display_pos = [int(n) for n in npc.position]
+            else:
+                npc.display_pos = [int(n) for n in npc.position]
             if hasattr(npc, 'move_target') and npc.move_target:
-                print(f'{npc.name} moving: {npc.position} -> {npc.move_target}')
                 dx = npc.move_target[0] - npc.position[0]
                 dy = npc.move_target[1] - npc.position[1]
                 dist = math.hypot(dx, dy)
@@ -145,15 +117,17 @@ def run_pygame_demo(world):
                     move_y = npc.move_speed * dy / dist
                     npc.position[0] += move_x
                     npc.position[1] += move_y
-            npc.display_pos = [int(n) for n in npc.position]
 
         # 根據視窗大小計算縮放比例
         win_w, win_h = screen.get_size()
-        scale_x = win_w / map_w
-        scale_y = win_h / map_h
+        # 防止 map_w 或 map_h 為 0
+        safe_map_w = map_w if map_w != 0 else 1
+        safe_map_h = map_h if map_h != 0 else 1
+        scale_x = win_w / safe_map_w
+        scale_y = win_h / safe_map_h
         scale = min(scale_x, scale_y)
-        offset_x = (win_w - map_w * scale) // 2
-        offset_y = (win_h - map_h * scale) // 2
+        offset_x = (win_w - safe_map_w * scale) // 2
+        offset_y = (win_h - safe_map_h * scale) // 2
 
         screen.fill((240,240,240))
         # 顯示說明
@@ -171,19 +145,32 @@ def run_pygame_demo(world):
             pygame.draw.rect(screen, (200,200,220), rect, border_radius=18)
             text = font.render(space.name, True, (40,40,40))
             screen.blit(text, (rect.x+8, rect.y+8))
-        # 先畫所有物品（根據 item_positions）
+        # 畫物品
         for item in items:
-            if item.name in item_positions:
-                ipos = item_positions[item.name]
-                # 固定大小為 30x30
-                item_rect = pygame.Rect(
-                    int(ipos[0]*scale+offset_x), int(ipos[1]*scale+offset_y),
-                    int(30*scale), int(30*scale)
-                )
-                pygame.draw.rect(screen, (100,100,255), item_rect, border_radius=8)
-                item_text = font.render(item.name, True, (20,20,80))
-                screen.blit(item_text, (item_rect.x, item_rect.y+int(14*scale)))
-        # 再畫空間內 NPC
+            # 優先用 item.position，如果沒有則找所屬空間
+            if hasattr(item, "position") and item.position:
+                ipos = item.position
+            else:
+                found = False   # 用於標記是否找到物品
+                for space in spaces:    # 遍歷所有空間
+                    if item in space.items: # 如果物品在空間中
+                        ipos = [
+                            space.display_pos[0] + space.display_size[0] // 3,
+                            space.display_pos[1] + space.display_size[1] // 2
+                        ]
+                        found = True    # 找到物品
+                        break
+                if not found:   # 如果沒有找到物品
+                    continue    # 跳過
+            # 固定大小為 30x30
+            item_rect = pygame.Rect(
+                int(ipos[0]*scale+offset_x), int(ipos[1]*scale+offset_y),
+                int(30*scale), int(30*scale)
+            )
+            pygame.draw.rect(screen, (100,100,255), item_rect, border_radius=8)
+            item_text = font.render(item.name, True, (20,20,80))
+            screen.blit(item_text, (item_rect.x, item_rect.y+int(14*scale)))
+        # 畫 NPC
         for npc in npcs:
             px, py = npc.display_pos
             draw_x = int(px * scale + offset_x)

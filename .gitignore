@@ -1,89 +1,53 @@
-# PyCharm specific files
-.idea/
-*.iml
-*.iws
-*.ipr
-.idea_modules/
-out/
-
-# Python bytecode
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
+# C extensions
+*.so
+
 # Distribution / packaging
+.eggs/
+*.egg-info/
 dist/
 build/
-*.egg-info/
+wheels/
+pip-wheel-metadata/
 *.egg
 
-# Virtual environments
-venv/
-env/
-ENV/
+# User-created files and directories
+*.user
+*.pydevproject
+*.db
+
+# Environments
 .env
+env/
+venv/
+ENV/
 .venv
-env.bak/
-venv.bak/
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.bak
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# macOS specific
+# macOS
 .DS_Store
-.AppleDouble
-.LSOverride
-Icon
 ._*
 
-# Windows specific
+# IDE and tools
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.tmproj
+
+# OS generated files
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-*.lnk
 
-# Linux specific
+# Other
 *~
-.directory
-.Trash-*
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local configuration files
-*.local
-local_settings.py
-
-# Database files
-*.db
-*.sqlite3
-*.sqlite
-
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Project-specific (you may want to customize this section)
-# data/
-# config/local.py
+archive/

@@ -1,19 +1,366 @@
-from models import NPC, Space, Item, Inventory, world_system, AI_System
-from mutation import npc_move_to_space, npc_pick_up_item, npc_interact_with_item
-from pygame_display import run_pygame_demo
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import Union, Literal, List, Optional, Dict, Any, Annotated
 import json
 import os
 import glob
-import pygame
-from pygame_map_selection import pygame_map_selection
 
 client = OpenAI()
-
 # 設定全局變量使 NPC 類可以訪問
 world_system = None
+
+#NOTE: Item
+
+# 定義基礎 Item 類
+
+class Item(BaseModel):
+    name: str
+    description: str
+    # Simpler interaction definition:
+    # - If value is None: no parameters needed
+    # - If value is dict: specifies required parameters and their types
+    properties: Dict[str, Any] = {}
+
+
+
+#NOTE: Space 空間 class
+
+# 定義 Space 類
+class Space(BaseModel):
+    name: str  # Space name, e.g., "kitchen" or "living_room"
+    description: str  # Description of the space
+    connected_spaces: List["Space"] = []  # Connected spaces (bidirectional relationships)
+    items: List["Item"] = []  # Items in the space
+    npcs: List["NPC"] = Field(default_factory=list)  # NPCs currently in the space
+
+    def biconnect(self, other_space: "Space") -> None:
+        """
+        Establish a bidirectional connection between this space and another space.
+        """
+        if other_space not in self.connected_spaces:
+            self.connected_spaces.append(other_space)
+        if self not in other_space.connected_spaces:
+            other_space.connected_spaces.append(self)
+
+    def __str__(self) -> str:
+        """
+        Returns a string representation of the space, including its connections, items, and NPCs.
+        """
+        connected = ", ".join([space.name for space in self.connected_spaces]) if self.connected_spaces else "none"
+        items = ", ".join([item.name for item in self.items]) if self.items else "none"
+        npcs = ", ".join([npc.name for npc in self.npcs]) if self.npcs else "none"
+        return (
+            f"Space Name: {self.name}\n"
+            f"Description: {self.description}\n"
+            f"Connected Spaces: {connected}\n"
+            f"Items in Space: {items}\n"
+            f"NPCs in Space: {npcs}"
+        )
+
+
+
+#NOTE: Define Inventory
+# Inventory 類
+class Inventory(BaseModel):
+    items: List[Item] = []  # 存放物品的列表
+    capacity: Optional[int] = None  # 容量限制（可選）
+
+    def add_item(self, item: Item) -> str:
+        """
+        將物品添加到 Inventory。
+        """
+        if self.capacity is not None and len(self.items) >= self.capacity:
+            return f"Cannot add {item.name}. Inventory is full."
+        self.items.append(item)
+        return f"Added {item.name} to inventory."
+    def remove_item(self, item_name: str) -> str:
+        """
+        根據物品名稱從 Inventory 中移除物品。
+        """
+        for i, item in enumerate(self.items):
+            if item.name == item_name:
+                removed_item = self.items.pop(i)
+                return f"Removed {removed_item.name} from inventory."
+        return f"Item with name '{item_name}' not found in inventory."
+
+
+    def has_item(self, item_name: str) -> bool:
+        """
+        檢查 Inventory 中是否有指定名稱的物品。
+        """
+        return any(item.name == item_name for item in self.items)
+
+    def list_items(self) -> str:
+        """
+        列出 Inventory 中的所有物品。
+        """
+        if not self.items:
+            return "Inventory is empty."
+        return "\n".join([f"- {item.name}: {item.description}" for item in self.items])
+
+#NOTE: Define NPC
+## 定義 NPC 類
+
+class NPC(BaseModel):
+    name: str
+    description: str
+    current_space: "Space"
+    inventory: "Inventory"
+    history: List[Dict[str, str]] = []
+    first_tick: bool = True
+
+    # Initial schema definitions
+    class EnterSpaceAction(BaseModel):
+        action_type: Literal["enter_space"]
+        target_space: str = Field(description="Space to move to")
+
+    class TalkToNPCAction(BaseModel):
+        action_type: Literal["talk_to_npc"]
+        target_npc: str = Field(description="NPC to talk to")
+        dialogue: str
+    
+    # 新的物品互動模式
+    class InteractItemAction(BaseModel):
+        action_type: Literal["interact_item"]
+        interact_with: str = Field(description="要互動的物品名稱")
+        how_to_interact: str = Field(description="詳細描述如何與物品互動")
+
+    class GeneralResponse(BaseModel):
+        self_talk_reasoning: str
+        action: Optional[Union[
+            "NPC.EnterSpaceAction", 
+            "NPC.InteractItemAction", 
+            "NPC.TalkToNPCAction"
+        ]] = None
+
+    def update_schema(self):
+        """
+        根據 NPC 當前狀態動態生成模式結構。
+        返回適當的 GeneralResponse 模型。
+        """
+        # 獲取當前狀態的有效選項
+        valid_spaces = [space.name for space in self.current_space.connected_spaces]
+        valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
+        available_items = [item.name for item in self.current_space.items + self.inventory.items]
+
+        # 定義空間移動操作
+        class EnterSpaceAction(BaseModel):
+            action_type: Literal["enter_space"]
+            target_space: Literal[*valid_spaces] if valid_spaces else str = Field(description="移動到的空間名稱")
+
+        # 定義與 NPC 對話操作
+        class TalkToNPCAction(BaseModel):
+            action_type: Literal["talk_to_npc"]
+            target_npc: Literal[*valid_npcs] if valid_npcs else str = Field(description="對話對象的名稱")
+            dialogue: str = Field(description="想要說的話")
+
+        # 定義物品互動操作（新版本）
+        class InteractItemAction(BaseModel):
+            action_type: Literal["interact_item"]
+            interact_with: Literal[*available_items] if available_items else str = Field(description="要互動的物品名稱")
+            how_to_interact: str = Field(description="詳細描述如何與物品互動。請使用描述性語言，清楚說明你想要如何使用或操作這個物品。")
+
+        # 頂層響應
+        class GeneralResponse(BaseModel):
+            self_talk_reasoning: str = Field(description="你對當前情況的思考和分析")
+            action: Optional[Union[
+                EnterSpaceAction,
+                InteractItemAction,
+                TalkToNPCAction
+            ]] = Field(None, description="你想要執行的動作")
+        
+        return GeneralResponse
+
+    def add_space_to_history(self):
+        """
+        將當前空間的信息（通過 __str__）附加到 NPC 的歷史記錄中。
+        """
+        self.history.append({"role": "system", "content": str(self.current_space)})
+
+    def print_current_schema(self):
+        """
+        打印 AI 使用的實際模式結構
+        """
+        try:
+            print("\n=== GeneralResponse Schema ===")
+            schema = self.update_schema().model_json_schema()
+            # 使用縮進使其更易讀
+            import json
+            print(json.dumps(schema, indent=2))
+            print("=== GeneralResponse Schema END ===\n")
+
+            if self.current_space.connected_spaces:
+                print("=== EnterSpaceAction Schema ===")
+                schema = self.EnterSpaceAction.model_json_schema()
+                print(json.dumps(schema, indent=2))
+                print("=== EnterSpaceAction Schema END ===\n")
+
+            print("=== InteractItemAction Schema ===")
+            schema = self.InteractItemAction.model_json_schema()
+            print(json.dumps(schema, indent=2))
+            print("=== InteractItemAction Schema END ===\n")
+
+            valid_npcs = [npc for npc in self.current_space.npcs if npc != self]
+            if valid_npcs:
+                print("=== TalkToNPCAction Schema ===")
+                schema = self.TalkToNPCAction.model_json_schema()
+                print(json.dumps(schema, indent=2))
+                print("=== TalkToNPCAction Schema END ===\n")
+        except Exception as e:
+            print(f"Error printing schema: {str(e)}")
+            # 打印額外的調試信息
+            print(f"Current space: {self.current_space.name}")
+            print(f"Available items: {[item.name for item in self.current_space.items + self.inventory.items]}")
+            print(f"Available NPCs: {[npc.name for npc in self.current_space.npcs if npc != self]}")
+
+    def move_to_space(self, target_space_name: str) -> str:
+        """
+        將 NPC 移動到連接的空間，並更新空間的 NPC 列表。
+        """
+        target_space_name = target_space_name.lower()
+
+        # Check if the target space is in the connected spaces of the current space
+        for connected_space in self.current_space.connected_spaces:
+            if connected_space.name.lower() == target_space_name:
+                # Remove the NPC from the current space's NPC list
+                if self in self.current_space.npcs:
+                    self.current_space.npcs.remove(self)
+
+                # Add the NPC to the target space's NPC list
+                connected_space.npcs.append(self)
+
+                # Move to the target space
+                self.current_space = connected_space
+
+                # Add the target space's information to history
+                self.add_space_to_history()
+
+                # Return the target space's description
+                return f"Moved to {connected_space.name}.\n{str(connected_space)}"
+
+        # If the target space is not connected, return an error message
+        return f"Cannot move to {target_space_name}. It is not connected to {self.current_space.name}."
+
+    def process_tick(self, user_input: Optional[str] = None):
+        """
+        Process a single tick of the NPC's behavior.
+        
+        Args:
+            user_input: Optional input from the user
+            
+        Returns:
+            A string describing the result of the NPC's action
+        """
+        # Get the dynamically generated schema
+        GeneralResponse = self.update_schema()
+        
+        # History and AI call
+        if self.first_tick:
+            self.add_space_to_history()
+            self.first_tick = False
+        if user_input:
+            self.history.append({"role": "user", "content": f"User: {user_input}"})
+
+        completion = client.beta.chat.completions.parse(
+            model="gpt-4o-2024-11-20",
+            messages=self.history,
+            response_format=GeneralResponse
+        )
+        response = completion.choices[0].message.parsed
+
+        # Add AI's self-reasoning and action to history
+        reasoning_content = f"Thinking: {response.self_talk_reasoning}"
+        self.history.append({"role": "assistant", "content": reasoning_content})
+        
+        # Add the attempted action to history if one exists
+        if response.action:
+            if hasattr(response.action, "action_type"):
+                if response.action.action_type == "interact_item":
+                    action_content = f"Action: I'm interacting with {response.action.interact_with} by {response.action.how_to_interact}"
+                elif response.action.action_type == "enter_space":
+                    action_content = f"Action: I'm moving to {response.action.target_space}"
+                elif response.action.action_type == "talk_to_npc":
+                    action_content = f"Action: I'm talking to {response.action.target_npc} saying: {response.action.dialogue}"
+                else:
+                    action_content = "Action: Attempting an unknown action type"
+            else:
+                action_content = "Action: Action has no type specified"
+                
+            self.history.append({"role": "assistant", "content": action_content})
+        
+        print("\n=== AI Response ===")
+        print(response)
+        print("==================\n")
+
+        # Handle the action
+        if not response.action:
+            print("No action taken")
+            return "Nothing happened."
+
+        action = response.action
+        result = ""
+        
+        # Process the action based on its type
+        if hasattr(action, "action_type"):
+            if action.action_type == "interact_item":
+                # 使用新的互動系統處理物品互動
+                result = world_system.process_interaction(
+                    self, 
+                    action.interact_with, 
+                    action.how_to_interact
+                )
+            elif action.action_type == "enter_space":
+                result = self.move_to_space(action.target_space)
+            elif action.action_type == "talk_to_npc":
+                result = self.talk_to_npc(action.target_npc, action.dialogue)
+            else:
+                result = f"Unknown action type: {action.action_type}"
+        else:
+            result = "Action has no type specified."
+
+        self.history.append({"role": "system", "content": result})
+        print("\n=== Action Result ===")
+        print(result)
+        print("===================\n")
+        return result
+
+    def talk_to_npc(self, target_npc_name: str, dialogue: str) -> str:
+        """
+        Handle talking to another NPC in the same space.
+        
+        Args:
+            target_npc_name: The name of the NPC to talk to
+            dialogue: What to say to the NPC
+            
+        Returns:
+            A string describing the result of the conversation
+        """
+        # Find the target NPC in the current space
+        target_npc = None
+        for npc in self.current_space.npcs:
+            if npc.name.lower() == target_npc_name.lower() and npc != self:
+                target_npc = npc
+                break
+        
+        if target_npc is None:
+            return f"Cannot find NPC '{target_npc_name}' in the current space."
+        
+        # In a more complex implementation, you might want to pass the dialogue to the target NPC
+        # and get a response back. For now, we'll just return a simple message.
+        return f"{self.name} says to {target_npc.name}: \"{dialogue}\""
+
+
+
+
+# Resolve forward references
+Space.model_rebuild()
+
+
+
+
+
+#NOTE: Loading world & Saving
+
 
 def load_world_from_json(file_path: str) -> Dict[str, Any]:
     """
@@ -54,39 +401,24 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
     items_dict = {}
     npcs_dict = {}
     
-    # --- 新增: 收集地圖資訊 ---
-    space_positions = {}
-    space_sizes = {}
-    item_positions = {}
-    item_sizes = {}
-    
     # 第一步: 創建所有空間（不含連接）
     for space_data in world_data.get("spaces", []):
         spaces_dict[space_data["name"]] = Space(
-            name = space_data["name"],
-            description = space_data["description"],
-            connected_spaces = [],  # 後續連接
-            items = [],  # 後續添加物品
-            npcs = [],  # 後續添加 NPC
-            display_pos = tuple(space_data["space_positions"]),
-            display_size = tuple(space_data["space_size"])
+            name=space_data["name"],
+            description=space_data["description"],
+            connected_spaces=[],  # 後續連接
+            items=[],  # 後續添加物品
+            npcs=[]  # 後續添加 NPC
         )
-        # 收集地圖資訊
-        # if "space_positions" in space_data and "space_size" in space_data:
-        #     space_positions[space_data["name"]] = space_data["space_positions"]
-        #     space_sizes[space_data["name"]] = space_data["space_size"]
-
+    
     # 第二步: 創建所有物品
     for item_data in world_data.get("items", []):
+        # 使用簡化的 Item 類創建物品（沒有 interactions 欄位）
         items_dict[item_data["name"]] = Item(
             name=item_data["name"],
             description=item_data["description"],
             properties=item_data.get("properties", {})
         )
-        # 收集物品位置與大小
-        if "position" in item_data and "size" in item_data:
-            item_positions[item_data["name"]] = item_data["position"]
-            item_sizes[item_data["name"]] = item_data["size"]
     
     # 第三步: 連接空間並向空間添加物品
     for space_data in world_data.get("spaces", []):
@@ -104,56 +436,43 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
             if item_name in items_dict:
                 space.items.append(items_dict[item_name])
     
-    # --- 新增: map_data ---
-    map_data = {}
-    if space_positions and space_sizes:
-        map_data["space_positions"] = space_positions
-        map_data["space_size"] = space_sizes
-    if item_positions and item_sizes:
-        map_data["item_positions"] = item_positions
-        map_data["item_sizes"] = item_sizes
-
     # 第四步: 創建 NPC 並放入空間
     for npc_data in world_data.get("npcs", []):
         # 為 NPC 創建庫存
         inventory = Inventory(items=[])
+        
+        # 如果指定了庫存物品，則添加到庫存中
         for item_name in npc_data.get("inventory", []):
             if item_name in items_dict:
                 inventory.add_item(items_dict[item_name])
+        
+        # 獲取起始空間
         starting_space_name = npc_data.get("starting_space")
         starting_space = spaces_dict.get(starting_space_name)
+        
         if starting_space:
-            # 取得空間中心作為 NPC 初始位置（正確用 map_data）
-            if "space_positions" in map_data and "space_size" in map_data:
-                pos = map_data["space_positions"].get(starting_space.name, [100,100])
-                size = map_data["space_size"].get(starting_space.name, [180,120])
-                center = [pos[0]+size[0]//2, pos[1]+size[1]//2]
-            else:
-                center = [100,100]
-            print(f"NPC {npc_data['name']} 初始空間: {starting_space.name}, 初始座標: {center}")
+            # 創建 NPC
             npc = NPC(
                 name=npc_data["name"],
                 description=npc_data["description"],
                 current_space=starting_space,
                 inventory=inventory,
-                history=npc_data.get("history", []),
-                display_pos=list(center),
-                position=list(center)
+                history=npc_data.get("history", [])
             )
+            
+            # 將 NPC 添加到其起始空間
             starting_space.npcs.append(npc)
+            
+            # 將 NPC 存儲在字典中
             npcs_dict[npc_data["name"]] = npc
     
-    # --- 新增: map_data ---
-    world = {
+    return {
         "world_name": world_data.get("world_name", "未知世界"),
         "description": world_data.get("description", ""),
         "spaces": spaces_dict,
         "items": items_dict,
         "npcs": npcs_dict
     }
-    if map_data:
-        world["map_data"] = map_data
-    return world
 
 # New function to list available worlds
 def list_available_worlds():
@@ -168,7 +487,7 @@ def list_available_worlds():
         print("Creating 'worlds' directory...")
         os.makedirs("worlds")
         return []
-
+    
     # Get all JSON files in the worlds directory
     world_files = glob.glob(os.path.join("worlds", "*.json"))
     
@@ -758,7 +1077,8 @@ class AI_System(BaseModel):
             return f"更新了物品 '{item_name}' 的描述。"
         return f"找不到物品 '{item_name}'。"
     
-    def _delete_and_create_new_item(self, old_item_name: str, new_item_name: str, new_description: str, space_name: str) -> str:
+    def _delete_and_create_new_item(self, old_item_name: str, new_item_name: str, 
+                                   new_description: str, space_name: str) -> str:
         """刪除舊物品並創建新物品（例如：修復損壞的物品）。"""
         # 刪除舊物品
         delete_result = self._delete_item(old_item_name, space_name, None)
@@ -793,14 +1113,10 @@ class AI_System(BaseModel):
         result = npc.inventory.add_item(item)
         return f"{npc_name} 撿起了 {item_name}。{result}"
 
+
+
+
 # Run the sandbox
 if __name__ == "__main__":
-    file_path = pygame_map_selection('worlds/maps')
-    print(f"載入地圖: {file_path}")
-    world = build_world_from_data(load_world_from_json(file_path))
-    # 初始化 AI_System 並設為全域變數
-    ai_system = AI_System(time="中午", weather="晴朗", history=[])
-    ai_system.initialize_world(world)
-    import models
-    models.world_system = ai_system
-    run_pygame_demo(world)
+    SandBox()
+
