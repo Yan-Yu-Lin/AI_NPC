@@ -4,6 +4,9 @@ from typing import Union, Literal, List, Optional, Dict, Any, Tuple
 import json
 import os
 import glob
+import asyncio
+from dataclasses import dataclass, field as dataclass_field
+import heapq
 
 client = OpenAI()
 
@@ -33,7 +36,47 @@ class Item(BaseModel):
 
 #NOTE: Space 空間 class
 
-# 定義 Space 類
+# 對話事件資料結構
+@dataclass(order=True)
+class ConversationEvent:
+    priority: int
+    timestamp: float
+    speaker: str
+    target: str
+    message: str
+    extra: dict = dataclass_field(default_factory=dict)
+
+class ConversationManager:
+    def __init__(self, space_name):
+        self.space_name = space_name
+        self.queue = []  # heapq for priority queue
+        self._lock = asyncio.Lock()
+        self._running = False
+
+    async def add_conversation(self, event: ConversationEvent):  # Add event to queue
+        async with self._lock:  # Thread-safe
+            heapq.heappush(self.queue, event)   # Add event to priority queue
+
+    async def run(self):  # Run the event loop
+        self._running = True
+        while self._running:
+            await asyncio.sleep(0)  # yield control
+            event = None
+            async with self._lock:  # Thread-safe
+                if self.queue:
+                    event = heapq.heappop(self.queue)
+            if event:
+                await self.handle_event(event)
+            else:
+                await asyncio.sleep(0.05)  # idle
+
+    async def handle_event(self, event: ConversationEvent):  # Handle a single event
+        # 這裡你可以自訂對話處理邏輯，例如呼叫 NPC 的 talk_to_npc
+        print(f"[Space: {self.space_name}] {event.speaker} 對 {event.target} 說: {event.message}")
+
+    def stop(self):  # Stop the event loop
+        self._running = False
+
 class Space(BaseModel):
     name: str  # Space name, e.g., "kitchen" or "living_room"
     description: str  # Description of the space
@@ -42,6 +85,9 @@ class Space(BaseModel):
     npcs: List["NPC"] = Field(default_factory=list)  # NPCs currently in the space
     display_pos: Tuple[int, int] = (0, 0)  # for pygame display
     display_size: Tuple[int, int] = (0, 0)  # for pygame display
+    conversation_manager: Optional["ConversationManager"] = None
+
+    model_config = {"arbitrary_types_allowed": True}
 
     def biconnect(self, other_space: "Space") -> None:
         """
@@ -66,8 +112,6 @@ class Space(BaseModel):
             f"Items in Space: {items}\n"
             f"NPCs in Space: {npcs}"
         )
-
-
 
 #NOTE: Define Inventory
 # Inventory 類
@@ -367,15 +411,22 @@ class NPC(BaseModel):
         # and get a response back. For now, we'll just return a simple message.
         return f"{self.name} says to {target_npc.name}: \"{dialogue}\""
 
-
-
-
-# Resolve forward references
-Space.model_rebuild()
-
-
-
-
+    async def async_talk_to_npc(self, target_npc_name: str, dialogue: str, priority: int = 10):
+        """
+        將對話事件丟到空間的對話管理器（asyncio 版本，帶優先級）。
+        """
+        import time
+        event = ConversationEvent(
+            priority=priority,
+            timestamp=time.time(),
+            speaker=self.name,
+            target=target_npc_name,
+            message=dialogue
+        )
+        if self.current_space.conversation_manager:
+            await self.current_space.conversation_manager.add_conversation(event)
+        else:
+            print(f"[警告] 空間 {self.current_space.name} 沒有對話管理器！")
 
 #NOTE: Loading world & Saving
 
@@ -413,7 +464,7 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
     if not world_data:
         print("錯誤: 未提供世界數據")
         return {}
-    
+
     # 初始化空集合
     spaces_dict = {}
     items_dict = {}
@@ -428,7 +479,8 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
             items = [],  # 後續添加物品
             npcs = [],  # 後續添加 NPC
             display_pos = tuple(space_data["space_positions"]),
-            display_size = tuple(space_data["space_size"])
+            display_size = tuple(space_data["space_size"]),
+            conversation_manager = ConversationManager(space_data["name"])
         )
     
     # 第二步: 創建所有物品
@@ -503,7 +555,7 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
         "world_name": world_data.get("world_name", "未知世界"),
         "description": world_data.get("description", ""),
         "spaces": spaces_dict,
-        "items": items_dict,
+        "items": items_dict,  # 確保總是有 'items' key
         "npcs": npcs_dict
     }
 
@@ -679,11 +731,6 @@ def SandBox():
     world_file_path = select_world()
     world_data = load_world_from_json(world_file_path)
     world = build_world_from_data(world_data)
-
-    list_of_NPC = xxx
-    list_of_space = xxx
-    list_of_items = xxx
-    function_from_front_end_initalize(list_of_NPC, list_of_items, list_of_space)
 
     # 初始化 AI_System 並設置為全局變量
     world_system = AI_System(
@@ -1109,8 +1156,10 @@ class AI_System(BaseModel):
     
     def _change_item_description(self, item_name: str, new_description: str) -> str:
         """修改物品的描述。"""
-        if item_name in self.world["items"]:
-            item = self.world["items"][item_name]
+        # 保證 self.world['items'] 存在，即使為空
+        items = self.world.get("items", {}) 
+        if item_name in items:
+            item = items[item_name]
             item.description = new_description
             return f"更新了物品 '{item_name}' 的描述。"
         return f"找不到物品 '{item_name}'。"
