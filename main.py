@@ -13,7 +13,7 @@ def main():
 
     # 2. 載入世界資料
     world_data = load_world_from_json(map_path)
-    world = build_world_from_data(world_data)
+    world = build_world_from_data(world_data)   
 
     # 2.5 初始化 AI 系統全域變數
     if world_system is None:

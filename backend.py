@@ -37,19 +37,29 @@ class Item(BaseModel):
 #NOTE: Space 空間 class
 
 # 對話事件資料結構
-@dataclass(order=True)
-class ConversationEvent:
-    priority: int
-    timestamp: float
-    speaker: str
-    target: str
-    message: str
-    extra: dict = dataclass_field(default_factory=dict)
+class ConversationEvent(BaseModel):
+    priority: int = Field(..., description="事件優先級，數字越小優先處理")
+    timestamp: float = Field(..., description="事件產生的時間戳")
+    speaker: str = Field(..., description="發話者名稱")
+    target: str = Field(..., description="目標 NPC 名稱")
+    message: str = Field(..., description="對話內容")
+    extra: dict = Field(default_factory=dict, description="額外資訊")
 
-class ConversationManager:
-    def __init__(self, space_name):
-        self.space_name = space_name
-        self.queue = []  # heapq for priority queue
+    def __lt__(self, other):
+        # heapq 需要 __lt__ 來比較優先級
+        if not isinstance(other, ConversationEvent):
+            return NotImplemented
+        # 先比 priority，再比 timestamp
+        return (self.priority, self.timestamp) < (other.priority, other.timestamp)
+
+class ConversationManager(BaseModel):
+    space_name: str = Field(..., description="空間名稱")
+    queue: list = Field(default_factory=list, description="對話事件的優先佇列（heapq）")
+    
+    # _lock 和 _running 屬於 runtime 狀態，不序列化
+    # 用 __init__ 動態初始化
+    def __init__(self, **data):
+        super().__init__(**data)
         self._lock = asyncio.Lock()
         self._running = False
 
@@ -71,7 +81,6 @@ class ConversationManager:
                 await asyncio.sleep(0.05)  # idle
 
     async def handle_event(self, event: ConversationEvent):  # Handle a single event
-        # 這裡你可以自訂對話處理邏輯，例如呼叫 NPC 的 talk_to_npc
         print(f"[Space: {self.space_name}] {event.speaker} 對 {event.target} 說: {event.message}")
 
     def stop(self):  # Stop the event loop
@@ -384,7 +393,7 @@ class NPC(BaseModel):
         print("\n=== Action Result ===")
         print(result)
         print("===================\n")
-        return result
+        return reasoning_content
 
     def talk_to_npc(self, target_npc_name: str, dialogue: str) -> str:
         """
@@ -480,7 +489,7 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
             npcs = [],  # 後續添加 NPC
             display_pos = tuple(space_data["space_positions"]),
             display_size = tuple(space_data["space_size"]),
-            conversation_manager = ConversationManager(space_data["name"])
+            conversation_manager = ConversationManager(space_name=space_data["name"])
         )
     
     # 第二步: 創建所有物品
@@ -997,24 +1006,24 @@ class AI_System(BaseModel):
     def initialize_world(self, world: Dict[str, Any]):
         """
         初始化系統並儲存世界狀態的引用。
-        
         Args:
             world: 包含世界狀態的字典
         """
+        print("[DEBUG] initialize_world: world keys before assignment:", list(world.keys()))
         self.world = world
-    
+        print("[DEBUG] initialize_world: self.world keys after assignment:", list(self.world.keys()))
+
     def process_interaction(self, npc: "NPC", item_name: str, how_to_interact: str) -> str:
         """
         處理 NPC 與物品的互動。
-        
         Args:
             npc: 執行互動的 NPC
             item_name: 互動物品的名稱
             how_to_interact: 描述 NPC 如何與物品互動
-            
         Returns:
             互動結果的描述字串
         """
+        print(f"[DEBUG] process_interaction: self.world keys = {list(self.world.keys())}")
         # 確認物品存在
         target_item = None
         item_location = None
@@ -1076,11 +1085,9 @@ class AI_System(BaseModel):
     def _handle_function(self, function: Any, npc: "NPC") -> str:
         """
         根據功能類型處理功能調用。
-        
         Args:
             function: 要執行的功能
             npc: 觸發功能的 NPC
-            
         Returns:
             功能執行結果的描述
         """
@@ -1102,25 +1109,23 @@ class AI_System(BaseModel):
         return "未知的功能類型。"
     
     def _create_item(self, item_name: str, description: str, space_name: str) -> str:
-        """創建新物品並放入指定空間。"""
+        print(f"[DEBUG] _create_item: self.world keys = {list(self.world.keys())}")
+        if "spaces" not in self.world:
+            return f"錯誤：world 結構異常，缺少 'spaces'。目前 world: {self.world}"
         space = self.world["spaces"].get(space_name)
         if not space:
             return f"找不到名為 '{space_name}' 的空間。"
-        
         # 創建新物品（不再需要 interactions）
         new_item = Item(
             name=item_name,
             description=description,
             properties={}  # 默認空屬性
         )
-        
         # 將物品添加到世界物品字典中
         self.world["items"][item_name] = new_item
-        
         # 將物品添加到空間
         space.items.append(new_item)
-        
-        return f"在 {space_name} 創建了新物品: {item_name}"
+        return f"已在空間 '{space_name}' 創建新物品 '{item_name}'。"
     
     def _delete_item(self, item_name: str, space_name: Optional[str], npc_name: Optional[str]) -> str:
         """從空間或 NPC 庫存中刪除物品。"""
