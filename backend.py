@@ -365,8 +365,11 @@ class NPC(BaseModel):
 
         # Handle the action
         if not response.action:
-            print("No action taken")
-            return "Nothing happened."
+            self.history.append({
+                "role": "system",
+                "content": "No action taken"
+            })
+            return response.self_talk_reasoning
 
         action = response.action
         result = ""
@@ -393,7 +396,7 @@ class NPC(BaseModel):
         print("\n=== Action Result ===")
         print(result)
         print("===================\n")
-        return reasoning_content
+        return response.self_talk_reasoning
 
     def talk_to_npc(self, target_npc_name: str, dialogue: str) -> str:
         """

@@ -309,25 +309,79 @@ def run_pygame_demo(world):
                 if role == "assistant" and content.startswith("Thinking:"):
                     base = "思考: "
                     thinking_text = content[9:].strip()  # 移除 "Thinking: " 前綴
-                    # 確保第一行不會太長
-                    first_line = base + thinking_text[:30] + ("..." if len(thinking_text) > 30 else "")
+                    # 根據聊天框寬度決定第一行文字
+                    first_line = base
+                    remaining_text = thinking_text
+                    max_allowed_width = max_text_width - 50 - font.size(base)[0]
+                    for i in range(len(remaining_text)):
+                        test_line = remaining_text[:i+1]    # 嘗試添加一個字元
+                        if font.size(test_line)[0] > max_allowed_width: # 如果寬度超過最大寬度
+                            first_line += remaining_text[:i]  # 添加到第一行
+                            if i < len(remaining_text):
+                                first_line += ""           # 添加省略號
+                            remaining_text = remaining_text[i:] # 更新剩餘文本
+                            break
+                    else:
+                        first_line += remaining_text
+                        remaining_text = ""
                     lines.append(first_line)
-                    remaining_text = thinking_text[30:] if len(thinking_text) > 30 else ""
-                    lines.extend(wrap_text(remaining_text, font, max_text_width - 50))
+                    
+                    # 處理剩餘的內容
+                    if remaining_text:
+                        # 計算剩餘文字的寬度，使用縮排
+                        prefix_width = font.size(base)[0]
+                        indent = " " * (len(base) + 2)  # 增加縮排
+                        
+                        # 處理剩餘的內容，使用換行
+                        wrapped_lines = wrap_text(remaining_text, font, max_text_width - 50)
+                        
+                        # 加入縮排的內容
+                        for i, line in enumerate(wrapped_lines):
+                            lines.append(indent + line)
                     wrapped_contents.extend(lines)
                 elif role == "assistant" and content.startswith("Action:"):
                     base = "行動: "
                     action_text = content[8:].strip()  # 移除 "Action: " 前綴
-                    # 確保第一行不會太長
-                    first_line = base + action_text[:30] + ("..." if len(action_text) > 30 else "")
+                    # 根據聊天框寬度決定第一行文字
+                    first_line = base
+                    remaining_text = action_text
+                    max_allowed_width = max_text_width - 50 - font.size(base)[0]
+                    for i in range(len(remaining_text)):
+                        test_line = remaining_text[:i+1]
+                        if font.size(test_line)[0] > max_allowed_width:
+                            first_line += remaining_text[:i]
+                            if i < len(remaining_text):
+                                first_line += ""
+                            remaining_text = remaining_text[i:]
+                            break
+                    else:
+                        first_line += remaining_text
+                        remaining_text = ""
                     lines.append(first_line)
-                    remaining_text = action_text[30:] if len(action_text) > 30 else ""
-                    lines.extend(wrap_text(remaining_text, font, max_text_width - 50))
+                    
+                    # 處理剩餘的內容
+                    if remaining_text:
+                        # 計算剩餘文字的寬度，使用縮排
+                        prefix_width = font.size(base)[0]
+                        indent = " " * (len(base) + 2)  # 增加縮排
+                        
+                        # 處理剩餘的內容，使用換行
+                        wrapped_lines = wrap_text(remaining_text, font, max_text_width - 50)
+                        
+                        # 加入縮排的內容
+                        for i, line in enumerate(wrapped_lines):
+                            lines.append(indent + line)
                     wrapped_contents.extend(lines)
                 else:
                     # 一般內容處理
                     lines = wrap_text(content, font, max_text_width - 40)
                     wrapped_contents.extend(lines)
+            
+            # 處理左側縮排
+            wrapped_contents = ["" + line for line in wrapped_contents]
+            
+            # 增加左側邊距
+            wrapped_contents = [" " + line for line in wrapped_contents]
             
             # 計算塊的高度
             block_lines = 1 + len(wrapped_contents) + (1 if wrapped_contents else 0)
