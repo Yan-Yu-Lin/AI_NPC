@@ -53,6 +53,11 @@ def run_pygame_demo(world):
         npc.radius = 24
 
     active_npc = npcs[0] if npcs else None  # 預設主控第一個 NPC
+    # 在初始化時輸出目前關注的NPC
+    if active_npc:
+        print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+    else:
+        print("========= 目前沒有可用的NPC ===========")
     last_ai_result = ""
     ai_thinking = False
     ai_threading = None
@@ -193,6 +198,148 @@ def run_pygame_demo(world):
                 new_path = os.path.join("worlds", filename)
                 save_world_to_json(world, new_path)
         # 取消則不做事
+
+    def npc_selection_menu(screen, font, npcs, active_npc):
+        if not npcs or len(npcs) <= 1:
+            return active_npc  # 如果沒有NPC或只有一個NPC，不需要切換
+        
+        # 設定視窗大小和位置
+        screen_w, screen_h = screen.get_size()
+        menu_w, menu_h = min(600, screen_w - 200), min(400, screen_h - 200)
+        menu_x = (screen_w - menu_w) // 2
+        menu_y = (screen_h - menu_h) // 2
+        menu_rect = pygame.Rect(menu_x, menu_y, menu_w, menu_h)
+        
+        # 設定標題和關閉按鈕
+        title = font.render("選擇要關注的 NPC", True, (255, 255, 255))
+        close_btn = pygame.Rect(menu_rect.x + menu_rect.width - 90, menu_rect.y + 5, 80, 32)
+        
+        # 初始化選中的NPC為當前活動的NPC
+        selected_npc = active_npc
+        selected_index = npcs.index(active_npc) if active_npc in npcs else 0
+        
+        # 顯示NPC列表的參數
+        line_height = 50  # 每個NPC項目的高度
+        npc_buttons = []  # 儲存NPC按鈕的矩形
+        visible_items = min(len(npcs), (menu_h - 100) // line_height)  # 可見NPC數量
+        
+        running = True
+        while running:
+            mouse_pos = pygame.mouse.get_pos()
+            mouse_pressed = pygame.mouse.get_pressed()[0]  # 左鍵
+            
+            # 繪製背景和標題
+            pygame.draw.rect(screen, (220, 220, 220), menu_rect)  # 主背景色改為淺灰白
+            pygame.draw.rect(screen, (60, 60, 120), (menu_rect.x, menu_rect.y, menu_rect.width, 40))  # 標題欄深藍
+            screen.blit(title, (menu_rect.x + 10, menu_rect.y + 10))
+            
+            # 設定裁剪區域，確保內容不會超出框框
+            clip_rect = pygame.Rect(menu_rect.x, menu_rect.y + 40, menu_rect.width, menu_rect.height - 80)
+            screen.set_clip(clip_rect)
+            
+            # 繪製NPC列表
+            npc_buttons.clear()
+            for i, npc in enumerate(npcs):
+                # 計算按鈕位置
+                btn_rect = pygame.Rect(
+                    menu_rect.x + 20, 
+                    menu_rect.y + 50 + i * line_height, 
+                    menu_rect.width - 40, 
+                    line_height
+                )
+                npc_buttons.append(btn_rect)
+                
+                # 決定按鈕顏色
+                if npc == selected_npc:  # 當前選中的NPC
+                    bg_color = (220, 220, 255)  # 淺藍背景
+                    text_color = (0, 0, 200)     # 深藍文字
+                    border_color = (100, 100, 200)  # 藍色邊框
+                elif btn_rect.collidepoint(mouse_pos):  # 鼠標懸停
+                    bg_color = (240, 240, 250)  # 非常淺藍背景
+                    text_color = (100, 100, 200)  # 中藍文字
+                    border_color = (180, 180, 220)  # 淺藍邊框
+                else:  # 普通狀態
+                    bg_color = (240, 240, 240)  # 淺灰背景
+                    text_color = (60, 60, 60)   # 深灰文字
+                    border_color = (200, 200, 200)  # 灰色邊框
+                
+                # 繪製按鈕背景
+                pygame.draw.rect(screen, bg_color, btn_rect, border_radius=5)
+                pygame.draw.rect(screen, border_color, btn_rect, 2, border_radius=5)  # 邊框
+                
+                # 繪製NPC名稱和描述
+                npc_name = font.render(npc.name, True, text_color)
+                screen.blit(npc_name, (btn_rect.x + 10, btn_rect.y))
+                
+                # 繪製描述（較小的字體）
+                desc_font = pygame.font.Font("fonts/msjh.ttf", 16)
+                desc = desc_font.render(npc.description[:50] + ("..." if len(npc.description) > 50 else ""), True, text_color)
+                screen.blit(desc, (btn_rect.x + 15, btn_rect.y + 25))
+            
+            # 重設裁剪區域
+            screen.set_clip(None)
+            
+            # 繪製底部區域
+            pygame.draw.rect(screen, (220, 220, 220), (menu_rect.x, menu_rect.y + menu_rect.height - 40, menu_rect.width, 40))
+            
+            # 繪製確認和取消按鈕
+            confirm_btn = pygame.Rect(menu_rect.x + 20, menu_rect.y + menu_rect.height - 35, 120, 30)
+            cancel_btn = pygame.Rect(menu_rect.x + menu_rect.width - 140, menu_rect.y + menu_rect.height - 35, 120, 30)
+            
+            # 確認按鈕
+            confirm_hover = confirm_btn.collidepoint(mouse_pos)
+            pygame.draw.rect(screen, (100, 180, 100) if confirm_hover else (80, 160, 80), confirm_btn, border_radius=5)
+            confirm_txt = font.render("確認", True, (255, 255, 255))
+            screen.blit(confirm_txt, (confirm_btn.x + 40, confirm_btn.y))
+            
+            # 取消按鈕
+            cancel_hover = cancel_btn.collidepoint(mouse_pos)
+            pygame.draw.rect(screen, (180, 100, 100) if cancel_hover else (160, 80, 80), cancel_btn, border_radius=5)
+            cancel_txt = font.render("取消", True, (255, 255, 255))
+            screen.blit(cancel_txt, (cancel_btn.x + 40, cancel_btn.y))
+            
+            # 更新顯示
+            pygame.display.flip()
+            
+            # 處理事件
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    return active_npc  # 保持原來的NPC
+                
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                        return active_npc  # 取消，返回原NPC
+                    elif event.key == pygame.K_RETURN:
+                        running = False
+                        return selected_npc  # 確認，返回選中的NPC
+                    elif event.key == pygame.K_UP and selected_index > 0:   # 上移選項
+                        selected_index -= 1
+                        selected_npc = npcs[selected_index]
+                    elif event.key == pygame.K_DOWN and selected_index < len(npcs) - 1:  # 下移選項
+                        selected_index += 1
+                        selected_npc = npcs[selected_index]
+                
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if cancel_btn.collidepoint(mouse_pos):
+                        running = False
+                        return active_npc  # 取消，返回原NPC
+                    
+                    elif confirm_btn.collidepoint(mouse_pos):
+                        running = False
+                        return selected_npc  # 確認，返回選中的NPC
+                    
+                    # 檢查是否點擊了NPC按鈕
+                    for i, btn in enumerate(npc_buttons):
+                        if btn.collidepoint(mouse_pos):
+                            selected_index = i
+                            selected_npc = npcs[i]
+                            # 雙擊選擇並確認
+                            if event.button == 1 and event.type == pygame.MOUSEBUTTONDOWN:
+                                return selected_npc
+        
+        return selected_npc  # 返回選中的NPC
 
     def wrap_text(text, font, max_width):
         # 處理字元換行，避免超出指定的最大寬度
@@ -541,6 +688,14 @@ def run_pygame_demo(world):
                 # 新增：P鍵觸發歷史記錄選單
                 elif event.key == pygame.K_p:
                     history_menu(screen, font, active_npc)
+                # 新增：N鍵觸發NPC切換選單
+                elif event.key == pygame.K_n and len(npcs) > 1:
+                    new_active_npc = npc_selection_menu(screen, font, npcs, active_npc)
+                    if new_active_npc and new_active_npc != active_npc:
+                        active_npc = new_active_npc
+                        last_ai_result = ""  # 清空上一個NPC的AI結果
+                        # 輸出目前關注的NPC
+                        print(f"========= 目前關注的NPC: {active_npc.name} ==========")
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 win_w, win_h = screen.get_size()
                 button_w, button_h = 120, 44
@@ -573,6 +728,16 @@ def run_pygame_demo(world):
                         running = False
                     if rect.collidepoint(event.pos) and key == "p":
                         history_menu(screen, font, active_npc)
+                    if rect.collidepoint(event.pos) and key == "s":
+                        save_menu(screen, font, world, world.get('_file_path', None) or "worlds/unnamed_save.json")
+                    # 新增：處理「切換NPC」按鈕
+                    if rect.collidepoint(event.pos) and key == "n" and len(npcs) > 1:
+                        new_active_npc = npc_selection_menu(screen, font, npcs, active_npc)
+                        if new_active_npc and new_active_npc != active_npc:
+                            active_npc = new_active_npc
+                            last_ai_result = ""  # 清空上一個NPC的AI結果
+                            # 輸出目前關注的NPC
+                            print(f"========= 目前關注的NPC: {active_npc.name} ==========")
         
         # 每次主循環都同步 display_pos 與 position，並推進動畫移動
         for npc in npcs:
