@@ -1,3 +1,5 @@
+#main.py
+
 import sys
 import os
 from backend import load_world_from_json, build_world_from_data, AI_System, world_system

@@ -1,3 +1,4 @@
+# backend.py
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import Union, Literal, List, Optional, Dict, Any, Tuple
@@ -209,6 +210,7 @@ class NPC(BaseModel):
         valid_spaces = [space.name for space in self.current_space.connected_spaces]
         valid_npcs = [npc.name for npc in self.current_space.npcs if npc.name != self.name]
         available_items = [item.name for item in self.current_space.items + self.inventory.items]
+        inventory_items = [item.name for item in self.inventory.items]
 
         # 定義空間移動操作
         class EnterSpaceAction(BaseModel):
@@ -221,11 +223,22 @@ class NPC(BaseModel):
             target_npc: Literal[*valid_npcs] if valid_npcs else str = Field(description="對話對象的名稱")
             dialogue: str = Field(description="想要說的話")
 
-        # 定義物品互動操作（新版本）
+        # 定義物品互動操作（原有單一物品互動）
         class InteractItemAction(BaseModel):
             action_type: Literal["interact_item"]
             interact_with: Literal[*available_items] if available_items else str = Field(description="要互動的物品名稱")
             how_to_interact: str = Field(description="詳細描述如何與物品互動。請使用描述性語言，清楚說明你想要如何使用或操作這個物品。")
+
+        # 定義多物品互動操作（新增：與空間中的目標物品和庫存中的多個物品互動）
+        class InteractWithTargetItemAndInventoryItems(BaseModel):
+            action_type: Literal["interact_with_target_and_inventory"]
+            target_item: Literal[*available_items] if available_items else str = Field(description="空間中的主要目標物品名稱，NPC 將移動到此物品位置進行互動")
+            inventory_item_1: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第一個輔助物品名稱（可選）")
+            inventory_item_2: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第二個輔助物品名稱（可選）")
+            inventory_item_3: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第三個輔助物品名稱（可選）")
+            inventory_item_4: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第四個輔助物品名稱（可選）")
+            inventory_item_5: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第五個輔助物品名稱（可選）")
+            how_to_interact: str = Field(description="詳細描述如何與這些物品互動。請使用描述性語言，清楚說明你想要如何使用或操作這些物品，例如烹飪、組裝或合成")
 
         # 頂層響應
         class GeneralResponse(BaseModel):
@@ -233,7 +246,8 @@ class NPC(BaseModel):
             action: Optional[Union[
                 EnterSpaceAction,
                 InteractItemAction,
-                TalkToNPCAction
+                TalkToNPCAction,
+                InteractWithTargetItemAndInventoryItems
             ]] = Field(None, description="你想要執行的動作")
         
         return GeneralResponse
@@ -352,6 +366,20 @@ class NPC(BaseModel):
                     action_content = f"Action: I'm moving to {response.action.target_space}"
                 elif response.action.action_type == "talk_to_npc":
                     action_content = f"Action: I'm talking to {response.action.target_npc} saying: {response.action.dialogue}"
+                elif response.action.action_type == "interact_with_target_and_inventory":
+                    # 處理多物品互動的歷史記錄
+                    target_item = response.action.target_item
+                    
+                    # 安全地獲取庫存物品，使用 getattr 避免屬性不存在的問題
+                    inventory_items = []
+                    for i in range(1, 6):
+                        item_attr = f"inventory_item_{i}"
+                        item = getattr(response.action, item_attr, None)
+                        if item:
+                            inventory_items.append(item)
+                    
+                    inventory_items_str = ", ".join(inventory_items) if inventory_items else "none"
+                    action_content = f"Action: I'm interacting with target item {target_item} using inventory items [{inventory_items_str}] by {response.action.how_to_interact}"
                 else:
                     action_content = "Action: Attempting an unknown action type"
             else:
@@ -387,6 +415,24 @@ class NPC(BaseModel):
                 result = self.move_to_space(action.target_space)
             elif action.action_type == "talk_to_npc":
                 result = self.talk_to_npc(action.target_npc, action.dialogue)
+            elif action.action_type == "interact_with_target_and_inventory":
+                # 處理多物品互動
+                target_item = action.target_item
+                
+                # 安全地獲取庫存物品，使用 getattr 避免屬性不存在的問題
+                inventory_items = []
+                for i in range(1, 6):
+                    item_attr = f"inventory_item_{i}"
+                    item = getattr(action, item_attr, None)
+                    if item:
+                        inventory_items.append(item)
+                
+                result = world_system.process_multi_item_interaction(
+                    self,
+                    target_item,
+                    inventory_items,
+                    action.how_to_interact
+                )
             else:
                 result = f"Unknown action type: {action.action_type}"
         else:
@@ -997,7 +1043,6 @@ class AI_System(BaseModel):
     
     class GeneralResponse(BaseModel):
         reasoning: str = Field(description="系統對 NPC 行為的內部分析和思考")
-        response_to_AI: str = Field(description="系統對 NPC 的回應，描述行為結果")
         function: Optional[Union[
             "AI_System.CreateItemFunction",
             "AI_System.DeleteItemFunction",
@@ -1005,6 +1050,7 @@ class AI_System(BaseModel):
             "AI_System.DeleteAndCreateNewItemFunction",
             "AI_System.MoveItemToInventoryFunction"
         ]] = None
+        response_to_AI: str = Field(description="系統對 NPC 的回應，描述行為結果")
     
     def initialize_world(self, world: Dict[str, Any]):
         """
