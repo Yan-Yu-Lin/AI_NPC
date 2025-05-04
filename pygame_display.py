@@ -336,7 +336,7 @@ def run_pygame_demo(world):
                             selected_index = i
                             selected_npc = npcs[i]
                             # 雙擊選擇並確認
-                            if event.button == 1 and event.type == pygame.MOUSEBUTTONDOWN:
+                            if event.button == 1 and event.type == pygame.MOUSEBUTTONDOWN:  # 左鍵
                                 return selected_npc
         
         return selected_npc  # 返回選中的NPC
@@ -741,7 +741,7 @@ def run_pygame_demo(world):
         
         # 每次主循環都同步 display_pos 與 position，並推進動畫移動
         for npc in npcs:
-            # 如果 npc.position 尚未指定，給預設值 (0, 0)
+            # 如果 npc.position 尚未指定，給預設值 [0, 0]
             if npc.position is None:
                 npc.position = [0, 0]
             if npc.display_pos is None:
@@ -755,6 +755,12 @@ def run_pygame_demo(world):
                 if dist < npc.move_speed:
                     npc.position = list(npc.move_target)
                     npc.move_target = None
+                    
+                    # 如果NPC正在等待互動，結束互動並顯示結果
+                    if hasattr(npc, 'waiting_interaction') and npc.waiting_interaction and npc.waiting_interaction.get('started', False):
+                        interaction_result = npc.complete_interaction()
+                        if interaction_result:
+                            last_ai_result = interaction_result
                 else:
                     move_x = npc.move_speed * dx / dist
                     move_y = npc.move_speed * dy / dist

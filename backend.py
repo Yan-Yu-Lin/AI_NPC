@@ -7,6 +7,7 @@ import glob
 import asyncio
 from dataclasses import dataclass, field as dataclass_field
 import heapq
+import sys
 
 client = OpenAI()
 
@@ -14,8 +15,14 @@ client = OpenAI()
 world_system = None
 
 def get_world_system():
+    """
+    獲取全局 world_system 物件。如果不存在，則創建一個新的 AI_System 物件。
+    返回：
+        AI_System 物件
+    """
     global world_system
     if world_system is None:
+        from backend import AI_System
         world_system = AI_System()
     return world_system
 
@@ -30,8 +37,8 @@ class Item(BaseModel):
     # - If value is None: no parameters needed
     # - If value is dict: specifies required parameters and their types
     properties: Dict[str, Any] = {}
-    position: Optional[Tuple[int, int]] = None  # 允許 None，代表未指定
-    size: Optional[Tuple[int, int]] = None      # 允許 None，代表未指定
+    position: Optional[List[int]] = None  # 允許 None，代表未指定，改為列表而不是元組
+    size: Optional[List[int]] = None      # 允許 None，代表未指定，改為列表而不是元組
 
 
 #NOTE: Space 空間 class
@@ -173,8 +180,11 @@ class NPC(BaseModel):
     first_tick: bool = True
     display_color: Optional[Tuple[int, int, int]] = None
     radius: Optional[int] = None
-    position: Optional[Tuple[int, int]] = None
-    display_pos: Optional[Tuple[int, int]] = None
+    position: Optional[List[int]] = None  # 改為列表而不是元組
+    display_pos: Optional[List[int]] = None  # 改為列表而不是元組
+    move_target: Optional[List[int]] = None  # 改為列表而不是元組
+    move_speed: Optional[int] = None
+    waiting_interaction: Optional[Dict[str, Any]] = None
 
     # Initial schema definitions
     class EnterSpaceAction(BaseModel):
@@ -298,15 +308,88 @@ class NPC(BaseModel):
 
                 # Move to the target space
                 self.current_space = connected_space
-
+                
+                # 設定動畫移動目標為空間中心位置
+                center_x = connected_space.display_pos[0] + connected_space.display_size[0] // 2
+                center_y = connected_space.display_pos[1] + connected_space.display_size[1] // 2
+                self.move_target = [center_x, center_y]  # 使用列表而不是元組
+                self.move_speed = 5  # 可自訂移動速度
+                
                 # Add the target space's information to history
                 self.add_space_to_history()
+                
+                return f"移動到{connected_space.name}空間"
 
-                # Return the target space's description
-                return f"Moved to {connected_space.name}.\n{str(connected_space)}"
+        return f"無法找到連接的空間：{target_space_name}"
 
-        # If the target space is not connected, return an error message
-        return f"Cannot move to {target_space_name}. It is not connected to {self.current_space.name}."
+    def move_to_item(self, item_name: str) -> str:
+        """
+        將 NPC 移動到指定物品的位置。
+        """
+        # 在當前空間中查找物品
+        for item in self.current_space.items:
+            if item.name.lower() == item_name.lower():
+                if hasattr(item, "position") and item.position:
+                    # 直接移動到物品位置
+                    self.move_target = list(item.position)  # 轉換為列表
+                    self.move_speed = 5
+                    return f"移動到{item.name}的位置"
+                else:
+                    # 如果物品沒有位置，則移動到空間中心
+                    space_center_x = self.current_space.display_pos[0] + self.current_space.display_size[0] // 3
+                    space_center_y = self.current_space.display_pos[1] + self.current_space.display_size[1] // 2
+                    self.move_target = [space_center_x, space_center_y]  # 使用列表而不是元組
+                    self.move_speed = 5
+                    return f"移動到{item.name}的位置"
+        
+        # 如果在當前空間中找不到物品，則查找連接的空間
+        for connected_space in self.current_space.connected_spaces:
+            for item in connected_space.items:
+                if item.name.lower() == item_name.lower():
+                    # 先移動到連接的空間
+                    return self.move_to_space(connected_space.name)
+        
+        return f"找不到物品：{item_name}"
+
+    def interact_with_item(self, item_name: str, how_to_interact: str) -> str:
+        """
+        將 NPC 移動到指定物品的位置並與之互動。
+        """
+        # 先移動到物品位置
+        move_result = self.move_to_item(item_name)
+        if not move_result.startswith("找不到物品"):
+            # 設置等待互動的狀態資訊
+            self.waiting_interaction = {
+                "item_name": item_name,
+                "how_to_interact": how_to_interact,
+                "started": True
+            }
+            return f"正在移動到{item_name}準備互動..."
+        return move_result
+
+    def complete_interaction(self) -> str:
+        """
+        當NPC完成移動後，執行互動。
+        """
+        if hasattr(self, "waiting_interaction") and self.waiting_interaction and self.waiting_interaction.get("started", False):
+            item_name = self.waiting_interaction["item_name"]
+            how_to_interact = self.waiting_interaction["how_to_interact"]
+            
+            # 使用 world_system 處理互動，而不是簡單地添加消息
+            global world_system
+            if world_system is None:
+                from backend import AI_System
+                world_system = AI_System()
+            
+            # 調用 AI_System 的 process_interaction 方法處理互動
+            interaction_result = world_system.process_interaction(self, item_name, how_to_interact)
+            
+            # 如果互動結果為空，提供一個默認消息
+            if not interaction_result:
+                interaction_result = f"與{item_name}互動: {how_to_interact}"
+            
+            return interaction_result
+        return "沒有待處理的互動。"
 
     def process_tick(self, user_input: Optional[str] = None):
         """
@@ -338,7 +421,7 @@ class NPC(BaseModel):
             response_format=GeneralResponse
         )
         response = completion.choices[0].message.parsed
-
+        
         # Add AI's self-reasoning and action to history
         reasoning_content = f"Thinking: {response.self_talk_reasoning}"
         self.history.append({"role": "assistant", "content": reasoning_content})
@@ -377,12 +460,8 @@ class NPC(BaseModel):
         # Process the action based on its type
         if hasattr(action, "action_type"):
             if action.action_type == "interact_item":
-                # 使用新的互動系統處理物品互動
-                result = world_system.process_interaction(
-                    self, 
-                    action.interact_with, 
-                    action.how_to_interact
-                )
+                # 使用 InteractItemAction 的 interact_with 和 how_to_interact 屬性
+                result = self.interact_with_item(action.interact_with, action.how_to_interact)
             elif action.action_type == "enter_space":
                 result = self.move_to_space(action.target_space)
             elif action.action_type == "talk_to_npc":
@@ -502,8 +581,8 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
             name = item_data["name"],
             description = item_data["description"],
             properties = item_data.get("properties", {}),
-            position = tuple(item_data["position"]),
-            size = tuple(item_data["size"])
+            position = list(item_data["position"]),  # 轉換為列表
+            size = list(item_data["size"])  # 轉換為列表
         )
     
     # 第三步: 連接空間並向空間添加物品
@@ -539,13 +618,13 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
         if starting_space:
             # 計算 NPC 初始位置
             if "position" in npc_data and npc_data["position"] is not None:
-                npc_pos = tuple(npc_data["position"])
+                npc_pos = list(npc_data["position"])  # 轉換為列表
             else:
                 # 預設在空間中央
-                npc_pos = (
+                npc_pos = [
                     starting_space.display_pos[0] + starting_space.display_size[0] // 2,
                     starting_space.display_pos[1] + starting_space.display_size[1] // 2
-                )
+                ]
             # 創建 NPC
             npc = NPC(
                 name = npc_data["name"],
@@ -553,8 +632,8 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
                 current_space = starting_space,
                 inventory = inventory,
                 history = npc_data.get("history", []),
-                display_pos = tuple(npc_pos),
-                position = tuple(npc_pos)
+                display_pos = list(npc_pos),  # 轉換為列表
+                position = list(npc_pos)  # 轉換為列表
             )
             
             # 將 NPC 添加到其起始空間
@@ -676,7 +755,9 @@ def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
             item_data = {
                 "name": item.name,
                 "description": item.description,
-                "properties": item.properties
+                "properties": item.properties,
+                "position": item.position,  # 轉換為列表
+                "size": item.size  # 轉換為列表
             }
             world_data["items"].append(item_data)
         
@@ -1012,10 +1093,32 @@ class AI_System(BaseModel):
         Args:
             world: 包含世界狀態的字典
         """
-        print("[DEBUG] initialize_world: world keys before assignment:", list(world.keys()))
-        self.world = world
-        print("[DEBUG] initialize_world: self.world keys after assignment:", list(self.world.keys()))
-
+        print(f"[DEBUG] initialize_world: world keys before assignment:", list(world.keys()))
+        # 深度複製世界數據以確保它是獨立的對象
+        self.world = dict(world)  # 使用直接的字典賦值而不是引用賦值
+        # 確保設置全局變量
+        global world_system
+        world_system = self
+        print(f"[DEBUG] initialize_world: self.world keys after assignment:", list(self.world.keys()))
+        
+        # 顯示世界的基本信息
+        print(f"[DEBUG] 世界名稱: {self.world['world_name']}")
+        print(f"[DEBUG] 世界描述: {self.world['description']}")
+        
+        print(f"[DEBUG] 空間數量: {len(self.world['spaces'])}")
+        space_names = list(self.world['spaces'].keys())
+        print(f"[DEBUG] 空間名稱: {space_names}")
+        
+        print(f"[DEBUG] 物品數量: {len(self.world['items'])}")
+        item_names = list(self.world['items'].keys())
+        print(f"[DEBUG] 物品名稱: {item_names}")
+        
+        print(f"[DEBUG] NPC 數量: {len(self.world['npcs'])}")
+        npc_names = list(self.world['npcs'].keys())
+        print(f"[DEBUG] NPC 名稱: {npc_names}")
+        
+        print(f"[DEBUG] world_system.world keys:", list(world_system.world.keys()) if world_system else "None")
+    
     def process_interaction(self, npc: "NPC", item_name: str, how_to_interact: str) -> str:
         """
         處理 NPC 與物品的互動。
@@ -1026,64 +1129,41 @@ class AI_System(BaseModel):
         Returns:
             互動結果的描述字串
         """
-        print(f"[DEBUG] process_interaction: self.world keys = {list(self.world.keys())}")
-        # 確認物品存在
-        target_item = None
-        item_location = None
+        global world_system
+        # 確保 world 已經正確初始化
+        if not self.world or len(self.world.keys()) == 0:
+            print(f"[WARNING] 世界數據未正確初始化，嘗試重新獲取")
+            # 使用 world_system
+            if "world_system" in globals() and globals()["world_system"] is not None and hasattr(globals()["world_system"], "world"):
+                print(f"[DEBUG] 使用 world_system.world")
+                self.world = globals()["world_system"].world.copy() if globals()["world_system"].world else {}
+                print(f"[DEBUG] world_system.world keys = {list(self.world.keys())}")
+            # 使用 main 模組的 world_system
+            elif "main" in sys.modules and hasattr(sys.modules["main"], "world_system") and sys.modules["main"].world_system is not None:
+                print(f"[DEBUG] 使用 main 模組的 world_system.world")
+                self.world = sys.modules["main"].world_system.world.copy() if sys.modules["main"].world_system.world else {}
+                print(f"[DEBUG] main 模組的 world_system.world keys = {list(self.world.keys())}")
+            else:
+                print(f"[ERROR] 無法獲取世界數據，互動可能無法正常工作")
         
-        # 檢查 NPC 的庫存
-        for item in npc.inventory.items:
-            if item.name == item_name:
-                target_item = item
-                item_location = "inventory"
-                break
-        
-        # 檢查當前空間
-        if target_item is None:
-            for item in npc.current_space.items:
-                if item.name == item_name:
-                    target_item = item
-                    item_location = "space"
-                    break
-        
-        if target_item is None:
-            return f"找不到名為 '{item_name}' 的物品。"
-        
-        # 準備互動訊息
-        interaction_message = {
-            "role": "system",
-            "content": f"{npc.name} 正在嘗試與 {item_name} 互動：{how_to_interact}\n"
-                      f"物品描述: {target_item.description}\n"
-                      f"物品位置: {'NPC 的庫存中' if item_location == 'inventory' else '當前空間'}"
-        }
-        
-        # 將互動訊息加入歷史記錄
-        self.history.append(interaction_message)
-        
-        # 使用 AI 來解釋互動並生成響應
-        completion = client.beta.chat.completions.parse(
-            model="gpt-4o-2024-11-20",
-            messages=self.history,
-            response_format=self.GeneralResponse
-        )
-        response = completion.choices[0].message.parsed
-        
-        # 將 AI 的解釋和響應添加到歷史記錄
-        self.history.append({
-            "role": "assistant",
-            "content": f"系統思考: {response.reasoning}\n回應: {response.response_to_AI}"
-        })
-        
-        # 處理可能的功能調用
-        if response.function:
-            result = self._handle_function(response.function, npc)
-            if result:
-                self.history.append({
-                    "role": "system",
-                    "content": f"系統執行功能: {result}"
-                })
-        
-        return response.response_to_AI
+        # 先讓NPC移動到物品位置
+        move_result = npc.move_to_item(item_name)
+        if not move_result.startswith("找不到物品"):
+            # 不再需要調用 OpenAI API，直接使用互動描述
+            # 準備互動結果訊息
+            interaction_result = f"{npc.name} 與 {item_name} 互動: {how_to_interact}"
+            
+            # 將互動訊息加入 NPC 的歷史記錄
+            npc.history.append({"role": "system", "content": interaction_result})
+            
+            # 結束互動（確保 waiting_interaction 已初始化）
+            if hasattr(npc, 'waiting_interaction') and npc.waiting_interaction is not None:
+                npc.waiting_interaction["started"] = False
+            else:
+                print(f"[WARNING] {npc.name} 的 waiting_interaction 為 None 或不存在")
+            
+            return interaction_result
+        return move_result
     
     def _handle_function(self, function: Any, npc: "NPC") -> str:
         """
