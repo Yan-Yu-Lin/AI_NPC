@@ -4,6 +4,107 @@ import math
 import os
 from backend import save_world_to_json
 
+# 圖片快取，避免重複載入
+item_image_cache = {}
+
+# 在適當的位置添加圖片載入功能
+def load_item_image(image_path):
+    """載入並返回物品圖片，主要從 worlds/picture 目錄加載"""
+    if not image_path:
+        return None
+
+    # 如果圖片已經在快取中，直接返回
+    if image_path in item_image_cache:
+        return item_image_cache[image_path]
+
+    # 主要圖片路徑
+    primary_path = os.path.join("worlds", "picture", image_path)
+
+    # 首先嘗試主要路徑
+    try:
+        if os.path.exists(primary_path):
+            image = pygame.image.load(primary_path).convert_alpha()
+            item_image_cache[image_path] = image
+            return image
+    except Exception as e:
+        print(f"載入圖片失敗 {primary_path}: {e}")
+
+    # 如果主要路徑失敗，嘗試備用位置
+    backup_paths = [
+        image_path,
+        os.path.join("images", image_path),
+        os.path.join("worlds", "images", image_path)
+    ]
+
+    for path in backup_paths:
+        try:
+            if os.path.exists(path):
+                image = pygame.image.load(path).convert_alpha()
+                item_image_cache[image_path] = image
+                # 複製到標準位置以便未來使用
+                try:
+                    import shutil
+                    os.makedirs(os.path.dirname(primary_path), exist_ok=True)
+                    shutil.copy(path, primary_path)
+                    print(f"圖片已複製到標準位置: {primary_path}")
+                except:
+                    pass
+                return image
+        except Exception:
+            continue
+
+    # 找不到圖片時使用占位圖
+    placeholder = pygame.Surface((40, 40), pygame.SRCALPHA)
+    placeholder.fill((150, 150, 200, 180))
+    pygame.draw.rect(placeholder, (80, 80, 120), placeholder.get_rect(), 2)
+    item_image_cache[image_path] = placeholder
+    return placeholder
+
+# 在繪製物品的部分使用此函數
+def draw_item(screen, item, pos, scale, offset_x, offset_y, font):
+    """繪製單個物品"""
+    # 獲取物品位置和大小
+    ipos = pos
+    item_size = getattr(item, "size", [30, 30])
+    if item_size is None:
+        item_size = [30, 30]
+
+    # 計算物品的螢幕位置和大小
+    item_rect = pygame.Rect(
+        int(ipos[0] * scale + offset_x),
+        int(ipos[1] * scale + offset_y),
+        int(item_size[0] * scale),
+        int(item_size[1] * scale)
+    )
+
+    # 嘗試載入物品圖片
+    image = None
+    if hasattr(item, "image_path") and item.image_path:
+        image = load_item_image(item.image_path)
+
+    # 如果有圖片則繪製圖片，否則繪製矩形
+    if image:
+        # 獲取縮放比例
+        img_scale = getattr(item, "image_scale", 1.0) * scale
+
+        # 計算縮放後的尺寸
+        img_width = int(image.get_width() * img_scale)
+        img_height = int(image.get_height() * img_scale)
+
+        # 縮放圖片
+        scaled_img = pygame.transform.scale(image, (img_width, img_height))
+
+        # 居中繪製圖片
+        img_rect = scaled_img.get_rect(center=item_rect.center)
+        screen.blit(scaled_img, img_rect)
+    else:
+        # 如果沒有圖片，繪製預設矩形
+        pygame.draw.rect(screen, (100, 100, 255), item_rect, border_radius=8)
+
+    # 繪製物品名稱
+    item_text = font.render(item.name, True, (20, 20, 80))
+    screen.blit(item_text, (item_rect.x, item_rect.y + int(14 * scale)))
+
 def run_pygame_demo(world):
     pygame.init()
     # 使用 RESIZABLE 讓視窗可調整大小
@@ -105,21 +206,21 @@ def run_pygame_demo(world):
         selected = 0
         menu_rect = pygame.Rect(100, 100, 300, 180)
         button_rects = []
-        
+
         # 初始化按鈕位置
         for i in range(len(menu_items)):
             rect = pygame.Rect(menu_rect.x + 20, menu_rect.y + 30 + i * 40, 260, 36)
             button_rects.append(rect)
-        
+
         running = True
         hovered = -1  # 滑鼠懸停的按鈕索引
         clicked = -1  # 記錄最後點擊的按鈕
         mouse_down = False  # 滑鼠按下狀態
-        
+
         while running:
             # 更新滑鼠狀態
             mouse_pos = pygame.mouse.get_pos()
-            
+
             # 檢查滑鼠懸停
             last_hovered = hovered
             hovered = -1
@@ -127,17 +228,17 @@ def run_pygame_demo(world):
                 if rect.collidepoint(mouse_pos):
                     hovered = idx
                     break
-            
+
             # 畫選單
             screen.fill((180, 180, 180))
             pygame.draw.rect(screen, (255, 255, 255), menu_rect)
-            
+
             # 畫按鈕
             button_rects.clear()
             for i, item in enumerate(menu_items):
                 rect = pygame.Rect(menu_rect.x + 20, menu_rect.y + 30 + i * 40, 260, 36)
                 button_rects.append(rect)
-                
+
                 # 決定按鈕顏色
                 if mouse_down and i == hovered:  # 滑鼠按下時顯示深藍色
                     # 點擊狀態：深藍底色
@@ -155,13 +256,13 @@ def run_pygame_demo(world):
                     # 一般狀態：淺灰底色
                     bg_color = (240, 240, 240)
                     text_color = (0, 0, 0)
-                
+
                 pygame.draw.rect(screen, bg_color, rect)
                 txt = font.render(item, True, text_color)
                 screen.blit(txt, (rect.x + 8, rect.y + 4))
-            
+
             pygame.display.flip()  # 更新畫面
-            
+
             # 處理事件
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -183,7 +284,7 @@ def run_pygame_demo(world):
                         running = False
                     mouse_down = False  # 重置滑鼠按下狀態
                     clicked = -1  # 重置點擊狀態
-        
+
         # 處理選擇
         if menu_items[selected] == "直接存檔":
             save_world_to_json(world, original_path)
@@ -202,53 +303,53 @@ def run_pygame_demo(world):
     def npc_selection_menu(screen, font, npcs, active_npc):
         if not npcs or len(npcs) <= 1:
             return active_npc  # 如果沒有NPC或只有一個NPC，不需要切換
-        
+
         # 設定視窗大小和位置
         screen_w, screen_h = screen.get_size()
         menu_w, menu_h = min(600, screen_w - 200), min(400, screen_h - 200)
         menu_x = (screen_w - menu_w) // 2
         menu_y = (screen_h - menu_h) // 2
         menu_rect = pygame.Rect(menu_x, menu_y, menu_w, menu_h)
-        
+
         # 設定標題和關閉按鈕
         title = font.render("選擇要關注的 NPC", True, (255, 255, 255))
         close_btn = pygame.Rect(menu_rect.x + menu_rect.width - 90, menu_rect.y + 5, 80, 32)
-        
+
         # 初始化選中的NPC為當前活動的NPC
         selected_npc = active_npc
         selected_index = npcs.index(active_npc) if active_npc in npcs else 0
-        
+
         # 顯示NPC列表的參數
         line_height = 50  # 每個NPC項目的高度
         npc_buttons = []  # 儲存NPC按鈕的矩形
         visible_items = min(len(npcs), (menu_h - 100) // line_height)  # 可見NPC數量
-        
+
         running = True
         while running:
             mouse_pos = pygame.mouse.get_pos()
             mouse_pressed = pygame.mouse.get_pressed()[0]  # 左鍵
-            
+
             # 繪製背景和標題
             pygame.draw.rect(screen, (220, 220, 220), menu_rect)  # 主背景色改為淺灰白
             pygame.draw.rect(screen, (60, 60, 120), (menu_rect.x, menu_rect.y, menu_rect.width, 40))  # 標題欄深藍
             screen.blit(title, (menu_rect.x + 10, menu_rect.y + 10))
-            
+
             # 設定裁剪區域，確保內容不會超出框框
             clip_rect = pygame.Rect(menu_rect.x, menu_rect.y + 40, menu_rect.width, menu_rect.height - 80)
             screen.set_clip(clip_rect)
-            
+
             # 繪製NPC列表
             npc_buttons.clear()
             for i, npc in enumerate(npcs):
                 # 計算按鈕位置
                 btn_rect = pygame.Rect(
-                    menu_rect.x + 20, 
-                    menu_rect.y + 50 + i * line_height, 
-                    menu_rect.width - 40, 
+                    menu_rect.x + 20,
+                    menu_rect.y + 50 + i * line_height,
+                    menu_rect.width - 40,
                     line_height
                 )
                 npc_buttons.append(btn_rect)
-                
+
                 # 決定按鈕顏色
                 if npc == selected_npc:  # 當前選中的NPC
                     bg_color = (220, 220, 255)  # 淺藍背景
@@ -262,51 +363,51 @@ def run_pygame_demo(world):
                     bg_color = (240, 240, 240)  # 淺灰背景
                     text_color = (60, 60, 60)   # 深灰文字
                     border_color = (200, 200, 200)  # 灰色邊框
-                
+
                 # 繪製按鈕背景
                 pygame.draw.rect(screen, bg_color, btn_rect, border_radius=5)
                 pygame.draw.rect(screen, border_color, btn_rect, 2, border_radius=5)  # 邊框
-                
+
                 # 繪製NPC名稱和描述
                 npc_name = font.render(npc.name, True, text_color)
                 screen.blit(npc_name, (btn_rect.x + 10, btn_rect.y))
-                
+
                 # 繪製描述（較小的字體）
                 desc_font = pygame.font.Font("fonts/msjh.ttf", 16)
                 desc = desc_font.render(npc.description[:50] + ("..." if len(npc.description) > 50 else ""), True, text_color)
                 screen.blit(desc, (btn_rect.x + 15, btn_rect.y + 25))
-            
+
             # 重設裁剪區域
             screen.set_clip(None)
-            
+
             # 繪製底部區域
             pygame.draw.rect(screen, (220, 220, 220), (menu_rect.x, menu_rect.y + menu_rect.height - 40, menu_rect.width, 40))
-            
+
             # 繪製確認和取消按鈕
             confirm_btn = pygame.Rect(menu_rect.x + 20, menu_rect.y + menu_rect.height - 35, 120, 30)
             cancel_btn = pygame.Rect(menu_rect.x + menu_rect.width - 140, menu_rect.y + menu_rect.height - 35, 120, 30)
-            
+
             # 確認按鈕
             confirm_hover = confirm_btn.collidepoint(mouse_pos)
             pygame.draw.rect(screen, (100, 180, 100) if confirm_hover else (80, 160, 80), confirm_btn, border_radius=5)
             confirm_txt = font.render("確認", True, (255, 255, 255))
             screen.blit(confirm_txt, (confirm_btn.x + 40, confirm_btn.y))
-            
+
             # 取消按鈕
             cancel_hover = cancel_btn.collidepoint(mouse_pos)
             pygame.draw.rect(screen, (180, 100, 100) if cancel_hover else (160, 80, 80), cancel_btn, border_radius=5)
             cancel_txt = font.render("取消", True, (255, 255, 255))
             screen.blit(cancel_txt, (cancel_btn.x + 40, cancel_btn.y))
-            
+
             # 更新顯示
             pygame.display.flip()
-            
+
             # 處理事件
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                     return active_npc  # 保持原來的NPC
-                
+
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         running = False
@@ -320,16 +421,16 @@ def run_pygame_demo(world):
                     elif event.key == pygame.K_DOWN and selected_index < len(npcs) - 1:  # 下移選項
                         selected_index += 1
                         selected_npc = npcs[selected_index]
-                
+
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if cancel_btn.collidepoint(mouse_pos):
                         running = False
                         return active_npc  # 取消，返回原NPC
-                    
+
                     elif confirm_btn.collidepoint(mouse_pos):
                         running = False
                         return selected_npc  # 確認，返回選中的NPC
-                    
+
                     # 檢查是否點擊了NPC按鈕
                     for i, btn in enumerate(npc_buttons):
                         if btn.collidepoint(mouse_pos):
@@ -338,20 +439,20 @@ def run_pygame_demo(world):
                             # 雙擊選擇並確認
                             if event.button == 1 and event.type == pygame.MOUSEBUTTONDOWN:  # 左鍵
                                 return selected_npc
-        
+
         return selected_npc  # 返回選中的NPC
 
     def wrap_text(text, font, max_width):
         # 處理字元換行，避免超出指定的最大寬度
         # 增強版：確保所有字符都能在視窗內完整顯示
-        
+
         # 安全邊距，預留更多空間
         max_width = max_width - 40  # 增加安全邊距
-        
+
         # 如果字串空白或寬度小於最大寬度，直接返回
         if not text or font.size(text)[0] <= max_width:
             return [text]
-            
+
         lines = []
         # 處理字串
         line = ""
@@ -363,61 +464,61 @@ def run_pygame_demo(world):
                 line = char         # 重置行內容
             else:
                 line = test_line    # 繼續加入字元
-        
+
         # 處理最後一行
         if line:
             lines.append(line)
-            
+
         return lines
 
     def history_menu(screen, font, active_npc):
         if not active_npc:
             return
-        
+
         history = active_npc.history
         if not history:
             return
-        
+
         # 按角色分組歷史訊息
         grouped_messages = []
         current_group = None
-        
+
         for message in history:
             role = message.get('role', 'Unknown')
             content = message.get('content', '')
-            
+
             if current_group is None or current_group['role'] != role:
                 current_group = {'role': role, 'contents': [content]}
                 grouped_messages.append(current_group)
             else:
                 current_group['contents'].append(content)
-        
+
         # 設定視窗大小和位置
         screen_w, screen_h = screen.get_size()
         menu_w, menu_h = min(800, screen_w - 200), min(500, screen_h - 200)
         menu_x = (screen_w - menu_w) // 2
         menu_y = (screen_h - menu_h) // 2
         menu_rect = pygame.Rect(menu_x, menu_y, menu_w, menu_h)
-        
+
         # 設定標題和關閉按鈕
         title = font.render(f"{active_npc.name} 的歷史記錄", True, (255, 255, 255))
         close_btn = pygame.Rect(menu_rect.x + menu_rect.width - 90, menu_rect.y + 5, 80, 32)
-        
+
         # 滾動相關設定
         scroll_y = 0
         line_height = 30
-        
+
         # 調整最大文字寬度，確保不會超出邊框
         max_text_width = menu_rect.width - 120
-        
+
         # 處理訊息塊結構化
         message_blocks = []
         total_lines = 0
-        
+
         for group in grouped_messages:
             role = group['role']
             contents = group['contents']
-            
+
             # 為角色設定顏色、樣式和圖示
             if role == "system":
                 title_text = "系統訊息"
@@ -443,15 +544,15 @@ def run_pygame_demo(world):
                 text_color = (100, 100, 100)  # 灰色文字
                 border_color = (200, 200, 200)  # 灰色邊框
                 icon = ""
-            
+
             # 處理標題和內容
             header = f"{icon} {title_text}"
             wrapped_contents = []
-            
+
             # 處理內容，特殊處理「思考」和「行動」
             for content in contents:
                 lines = []
-                
+
                 # 特殊處理 assistant 角色的思考和行動
                 if role == "assistant" and content.startswith("Thinking:"):
                     base = "思考: "
@@ -472,16 +573,16 @@ def run_pygame_demo(world):
                         first_line += remaining_text
                         remaining_text = ""
                     lines.append(first_line)
-                    
+
                     # 處理剩餘的內容
                     if remaining_text:
                         # 計算剩餘文字的寬度，使用縮排
                         prefix_width = font.size(base)[0]
                         indent = " " * (len(base) + 2)  # 增加縮排
-                        
+
                         # 處理剩餘的內容，使用換行
                         wrapped_lines = wrap_text(remaining_text, font, max_text_width - 50)
-                        
+
                         # 加入縮排的內容
                         for i, line in enumerate(wrapped_lines):
                             lines.append(indent + line)
@@ -505,16 +606,16 @@ def run_pygame_demo(world):
                         first_line += remaining_text
                         remaining_text = ""
                     lines.append(first_line)
-                    
+
                     # 處理剩餘的內容
                     if remaining_text:
                         # 計算剩餘文字的寬度，使用縮排
                         prefix_width = font.size(base)[0]
                         indent = " " * (len(base) + 2)  # 增加縮排
-                        
+
                         # 處理剩餘的內容，使用換行
                         wrapped_lines = wrap_text(remaining_text, font, max_text_width - 50)
-                        
+
                         # 加入縮排的內容
                         for i, line in enumerate(wrapped_lines):
                             lines.append(indent + line)
@@ -523,16 +624,16 @@ def run_pygame_demo(world):
                     # 一般內容處理
                     lines = wrap_text(content, font, max_text_width - 40)
                     wrapped_contents.extend(lines)
-            
+
             # 處理左側縮排
             wrapped_contents = ["" + line for line in wrapped_contents]
-            
+
             # 增加左側邊距
             wrapped_contents = [" " + line for line in wrapped_contents]
-            
+
             # 計算塊的高度
             block_lines = 1 + len(wrapped_contents) + (1 if wrapped_contents else 0)
-            
+
             # 添加訊息塊，包含背景色、標題、內容等信息
             message_blocks.append({
                 'role': role,
@@ -543,66 +644,66 @@ def run_pygame_demo(world):
                 'border_color': border_color,
                 'lines': block_lines  # 標題 + 內容行數 + 間隔
             })
-            
+
             # 累計總行數
             total_lines += block_lines + 1  # 加上額外間隔
-        
+
         # 計算最大滾動範圍
         max_scroll = max(0, total_lines * line_height - (menu_rect.height - 80))
-        
+
         running = True
         while running:
             mouse_pos = pygame.mouse.get_pos()
             mouse_pressed = pygame.mouse.get_pressed()[0]
-            
+
             # 繪製背景和標題
             pygame.draw.rect(screen, (220, 220, 220), menu_rect)  # 主背景色改為淺灰白
             pygame.draw.rect(screen, (60, 60, 120), (menu_rect.x, menu_rect.y, menu_rect.width, 40))  # 標題欄深藍
             screen.blit(title, (menu_rect.x + 10, menu_rect.y + 10))
-            
+
             # 設定裁剪區域，確保內容不會超出框框
             clip_rect = pygame.Rect(menu_rect.x, menu_rect.y + 40, menu_rect.width, menu_rect.height - 80)
             screen.set_clip(clip_rect)
-            
+
             # 繪製歷史記錄（使用訊息塊結構）
             y_offset = menu_rect.y + 50 - scroll_y
-            
+
             for block in message_blocks:
                 # 跳過完全不在視圖中的塊
                 block_height = block['lines'] * line_height
                 if y_offset + block_height < menu_rect.y + 40 or y_offset > menu_rect.y + menu_rect.height - 40:
                     y_offset += block_height + line_height // 2  # 加上額外間隔
                     continue
-                
+
                 # 添加塊之間的間隔
                 y_offset += line_height // 2
-                
+
                 # 繪製訊息塊背景
                 block_padding = 10  # 塊內部邊距
                 block_rect = pygame.Rect(
                     menu_rect.x + 60,  # 更大的左邊距
-                    y_offset, 
+                    y_offset,
                     menu_rect.width - 120,  # 更窄的寬度
                     block_height - line_height // 2
                 )
-                
+
                 # 使用圓角矩形繪製背景
                 pygame.draw.rect(screen, block['bg_color'], block_rect, border_radius=10)
                 pygame.draw.rect(screen, block['border_color'], block_rect, 2, border_radius=10)  # 有顏色的邊框
-                
+
                 # 繪製標題 (加粗效果)
                 header_bg = pygame.Rect(
-                    block_rect.x, 
-                    block_rect.y, 
-                    block_rect.width, 
+                    block_rect.x,
+                    block_rect.y,
+                    block_rect.width,
                     line_height
                 )
                 pygame.draw.rect(screen, (255, 255, 255, 40), header_bg, border_top_left_radius=10, border_top_right_radius=10)  # 半透明標題背景
-                
+
                 header_txt = font.render(block['header'], True, block['text_color'])
                 screen.blit(header_txt, (block_rect.x + block_padding, y_offset + 5))
                 y_offset += line_height
-                
+
                 # 繪製內容（稍微縮排）
                 for i, line in enumerate(block['contents']):
                     if y_offset >= menu_rect.y + 40 and y_offset < menu_rect.y + menu_rect.height - 40:
@@ -613,16 +714,16 @@ def run_pygame_demo(world):
                         else:  # 一般內容行縮排
                             screen.blit(txt, (block_rect.x + block_padding + 15, y_offset + 5))  # 內容縮排
                     y_offset += line_height
-                
+
                 # 塊間間隔
                 y_offset += line_height // 2
-            
+
             # 重設裁剪區域
             screen.set_clip(None)
-            
+
             # 繪製底部區域（避免內容溢出）
             pygame.draw.rect(screen, (220, 220, 220), (menu_rect.x, menu_rect.y + menu_rect.height - 40, menu_rect.width, 40))
-            
+
             # 繪製關閉按鈕 - 移到這裡確保它不會被其他元素覆蓋
             is_hover = close_btn.collidepoint(mouse_pos)
             is_pressed = is_hover and mouse_pressed
@@ -632,15 +733,15 @@ def run_pygame_demo(world):
                 btn_color = (230, 230, 230)  # 懸停顏色（淺灰色）
             else:
                 btn_color = (200, 200, 200)  # 預設顏色（灰色）
-            
+
             pygame.draw.rect(screen, btn_color, close_btn, border_radius=5)
             pygame.draw.rect(screen, (100, 100, 100), close_btn, 1, border_radius=5)  # 邊框
             close_txt = font.render("關閉", True, (0, 0, 0))
             screen.blit(close_txt, (close_btn.x + 20, close_btn.y))
-            
+
             # 更新顯示
             pygame.display.flip()
-            
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -738,7 +839,7 @@ def run_pygame_demo(world):
                             last_ai_result = ""  # 清空上一個NPC的AI結果
                             # 輸出目前關注的NPC
                             print(f"========= 目前關注的NPC: {active_npc.name} ==========")
-        
+
         # 每次主循環都同步 display_pos 與 position，並推進動畫移動
         for npc in npcs:
             # 如果 npc.position 尚未指定，給預設值 [0, 0]
@@ -755,7 +856,7 @@ def run_pygame_demo(world):
                 if dist < npc.move_speed:
                     npc.position = list(npc.move_target)
                     npc.move_target = None
-                    
+
                     # 如果NPC正在等待互動，結束互動並顯示結果
                     if hasattr(npc, 'waiting_interaction') and npc.waiting_interaction and npc.waiting_interaction.get('started', False):
                         interaction_result = npc.complete_interaction()
@@ -811,14 +912,7 @@ def run_pygame_demo(world):
                         break
                 if not found:   # 如果沒有找到物品
                     continue    # 跳過
-            # 固定大小為 30x30
-            item_rect = pygame.Rect(
-                int(ipos[0]*scale+offset_x), int(ipos[1]*scale+offset_y),
-                int(30*scale), int(30*scale)
-            )
-            pygame.draw.rect(screen, (100,100,255), item_rect, border_radius=8)
-            item_text = font.render(item.name, True, (20,20,80))
-            screen.blit(item_text, (item_rect.x, item_rect.y+int(14*scale)))
+            draw_item(screen, item, ipos, scale, offset_x, offset_y, font)
         # 畫 NPC
         for npc in npcs:
             px, py = npc.display_pos
