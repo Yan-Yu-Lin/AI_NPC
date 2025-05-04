@@ -24,6 +24,7 @@ def get_world_system():
     if world_system is None:
         from backend import AI_System
         world_system = AI_System()
+
     return world_system
 
 #NOTE: Item
@@ -645,6 +646,27 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
 
             # 將 NPC 存儲在字典中
             npcs_dict[npc_data["name"]] = npc
+
+    # 取得物件參考
+    spaces = list(spaces_dict.values())
+    npcs = list(npcs_dict.values())
+    items = list(items_dict.values())
+    
+    # 為物品自動設定圖片路徑（如果尚未設定）
+    for item in items:
+        if not getattr(item, "image_path", None):
+            # 嘗試用物品名稱作為圖片檔名
+            item_name = getattr(item, "name", "").lower()
+            # 移除可能的前綴和後綴，只保留核心名稱
+            # 例如 table_living_room 變成 table
+            if "_" in item_name:
+                core_name = item_name.split("_")[0]
+                if os.path.exists(os.path.join("worlds", "picture", f"{core_name}.png")):
+                    item.image_path = f"{core_name}.png"
+                    continue
+            # 嘗試直接使用完整名稱
+            if os.path.exists(os.path.join("worlds", "picture", f"{item_name}.png")):
+                item.image_path = f"{item_name}.png"
 
     return {
         "world_name": world_data.get("world_name", "未知世界"),
