@@ -60,6 +60,18 @@ def load_item_image(image_path):
     item_image_cache[image_path] = placeholder
     return placeholder
 
+def calculate_adaptive_scale(image, target_size=100):
+    """根據圖片大小計算合適的縮放比例"""
+    # 獲取原始尺寸
+    orig_width = image.get_width()
+    orig_height = image.get_height()
+
+    # 計算較大的邊
+    max_side = max(orig_width, orig_height)
+
+    # 計算縮放比例，使較大的邊等於目標尺寸
+    return target_size / max_side if max_side > 0 else 1.0
+
 # 在繪製物品的部分使用此函數
 def draw_item(screen, item, pos, scale, offset_x, offset_y, font):
     """繪製單個物品"""
@@ -85,11 +97,12 @@ def draw_item(screen, item, pos, scale, offset_x, offset_y, font):
     # 如果有圖片則繪製圖片，否則繪製矩形
     if image:
         # 獲取縮放比例
-        img_scale = getattr(item, "image_scale", 1.0) * scale
+        adaptive_scale = calculate_adaptive_scale(image)
+        img_scale = getattr(item, "image_scale", 1.0) * scale * adaptive_scale
 
         # 計算縮放後的尺寸
         img_width = int(image.get_width() * img_scale)
-        img_height = int(image.get_height() * img_scale)
+        img_height = int(image.get_height() * img_scale )
 
         # 縮放圖片
         scaled_img = pygame.transform.scale(image, (img_width, img_height))

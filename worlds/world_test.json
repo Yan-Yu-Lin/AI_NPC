@@ -150,7 +150,7 @@
         "battery_level": 80
       },
       "image_path": "remote_control.png",
-      "image_scale": 1.2
+      "image_scale": 0.12
     },
     {
       "name": "magazine",
@@ -172,7 +172,7 @@
         "content": "在奇蹟的時代，當魔法仍然自由地流動於世界之中..."
       },
       "image_path": "magazine.png",
-      "image_scale": 1.0
+      "image_scale": 0.05
     },
     {
       "name": "table_living_room",
@@ -191,7 +191,7 @@
       },
       "properties": {},
       "image_path": "table_living.png",
-      "image_scale": 1.5
+      "image_scale": 0.7
     },
     {
       "name": "sofa",
@@ -210,7 +210,7 @@
       },
       "properties": {},
       "image_path": "sofa.png",
-      "image_scale": 1.8
+      "image_scale": 0.7
     },
     {
       "name": "piano",
@@ -232,7 +232,7 @@
         "is_playing": false
       },
       "image_path": "piano.png",
-      "image_scale": 1.6
+      "image_scale": 0.7
     },
     {
       "name": "table_study",
@@ -251,7 +251,7 @@
       },
       "properties": {},
       "image_path": "study_desk.png",
-      "image_scale": 1.4
+      "image_scale": 0.7
     },
     {
       "name": "bookshelf",
@@ -270,7 +270,7 @@
       },
       "properties": {},
       "image_path": "bookshelf.png",
-      "image_scale": 1.5
+      "image_scale": 0.7
     },
     {
       "name": "pencil",
@@ -294,7 +294,7 @@
         "content": ""
       },
       "image_path": "pencil.png",
-      "image_scale": 0.8
+      "image_scale": 0.1
     },
     {
       "name": "knife",
@@ -318,7 +318,7 @@
         "is_sharpened": false
       },
       "image_path": "knife.png",
-      "image_scale": 1.0
+      "image_scale": 0.1
     },
     {
       "name": "sink",
@@ -340,7 +340,7 @@
         "is_clean": true
       },
       "image_path": "sink.png",
-      "image_scale": 1.3
+      "image_scale": 10
     },
     {
       "name": "refrigerator",
@@ -360,7 +360,7 @@
       },
       "properties": {},
       "image_path": "refrigerator.png",
-      "image_scale": 1.7
+      "image_scale": 0.7
     },
     {
       "name": "bed",
@@ -379,7 +379,7 @@
       },
       "properties": {},
       "image_path": "bed.png",
-      "image_scale": 1.8
+      "image_scale": 0.7
     },
     {
       "name": "diary",
@@ -404,7 +404,7 @@
         "content": ""
       },
       "image_path": "diary.png",
-      "image_scale": 0.9
+      "image_scale": 0.1
     },
     {
       "name": "pen",
@@ -428,7 +428,7 @@
         "content": ""
       },
       "image_path": "pen.png",
-      "image_scale": 0.7
+      "image_scale": 0.1
     },
     {
       "name": "table_bedroom",
@@ -447,7 +447,7 @@
       },
       "properties": {},
       "image_path": "bedroom_table.png",
-      "image_scale": 1.4
+      "image_scale": 0.7
     },
     {
       "name": "bathtub",
@@ -466,7 +466,7 @@
       },
       "properties": {},
       "image_path": "bathtub.png",
-      "image_scale": 1.5
+      "image_scale": 0.7
     },
     {
       "name": "shower",
@@ -485,7 +485,7 @@
       },
       "properties": {},
       "image_path": "shower.png",
-      "image_scale": 1.6
+      "image_scale": 0.7
     },
     {
       "name": "tissue",
@@ -505,7 +505,7 @@
       },
       "properties": {},
       "image_path": "tissue.png",
-      "image_scale": 0.9
+      "image_scale": 0.7
     },
     {
       "name": "toilet",
@@ -524,7 +524,7 @@
       },
       "properties": {},
       "image_path": "toilet.png",
-      "image_scale": 1.4
+      "image_scale": 0.7
     },
     {
       "name": "book",
@@ -546,7 +546,7 @@
         "content": ""
       },
       "image_path": "book.png",
-      "image_scale": 0.8
+      "image_scale": 0.1
     }
   ],
   "npcs": [
