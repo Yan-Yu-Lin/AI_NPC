@@ -1012,46 +1012,241 @@ class AI_System(BaseModel):
     history: List[Dict[str, str]] = []  # 系統歷史記錄
     world: Dict[str, Any] = {}  # 世界狀態的引用
     
-    class CreateItemFunction(BaseModel):
-        function_type: Literal["create_item"]
-        item_name: str = Field(description="新物品的名稱")
-        description: str = Field(description="新物品的描述")
-        space_name: str = Field(description="物品將被放置的空間名稱")
+    class CreateItemsFunction(BaseModel):
+        function_type: Literal["create_items"]
+        create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。用於從儲存空間（如冰箱、櫃子）取出物品時，或其他需要創建物品的場景。例如：從冰箱拿出飲料，create_item_1 為「飲料」。")
+        create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一瓶冰涼的可樂，剛從冰箱拿出來，表面有冷凝水珠。」")
+        create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_2 為「蔬菜」。")
+        create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「新鮮的蔬菜，包括胡蘿蔔、青椒和洋蔥。」")
+        create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_3 為「調味料」。")
+        create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「各種烹飪用的調味料，包括鹽、胡椒和香草。」")
+        create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
+        create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
+        create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
+        create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
     
     class DeleteItemFunction(BaseModel):
         function_type: Literal["delete_item"]
-        item_name: str = Field(description="要刪除的物品名稱")
-        space_name: Optional[str] = Field(None, description="物品所在的空間名稱（如果不在任何 NPC 的庫存中）")
-        npc_name: Optional[str] = Field(None, description="持有物品的 NPC 名稱（如果在 NPC 的庫存中）")
+        item_name: str = Field(description="要刪除的物品名稱。僅用於刪除單一物品，例如 NPC 丟棄或消耗物品時。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
     
     class ChangeItemDescriptionFunction(BaseModel):
         function_type: Literal["change_item_description"]
-        item_name: str = Field(description="要修改的物品名稱")
-        new_description: str = Field(description="物品的新描述")
+        item_name: str = Field(description="要修改描述的物品名稱。用於物品狀態變化但不需要創建新物品時，例如：物品被使用後狀態改變、物品被修理或損壞。")
+        new_description: str = Field(description="物品的新描述，反映其當前狀態。例如：「杯子裡現在裝滿了水」或「手機屏幕有了裂痕」。")
     
     class DeleteAndCreateNewItemFunction(BaseModel):
         function_type: Literal["delete_and_create_new_item"]
-        old_item_name: str = Field(description="要替換的物品名稱")
-        new_item_name: str = Field(description="新物品的名稱")
-        new_description: str = Field(description="新物品的描述")
-        space_name: str = Field(description="物品所在的空間名稱")
+        old_item_name: str = Field(description="要替換的物品名稱。用於物品轉換為另一個物品的場景，例如：烹飪食材變成料理、修理破損物品、或物品狀態顯著改變需要替換。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
+        new_item_name: str = Field(description="新物品的名稱。例如：將「生雞肉」烹飪後變成「烤雞」。")
+        new_description: str = Field(description="新物品的詳細描述。例如：「一盤香噴噴的烤雞，表面金黃酥脆，肉質鮮嫩多汁。」")
     
     class MoveItemToInventoryFunction(BaseModel):
         function_type: Literal["move_item_to_inventory"]
-        item_name: str = Field(description="要移動的物品名稱")
-        npc_name: str = Field(description="接收物品的 NPC 名稱")
+        item_name: str = Field(description="要移動的物品名稱。用於 NPC 撿起或收集空間中的物品時，例如：撿起地上的鑰匙、從桌上拿起書本。")
+    
+    class MoveItemFromInventoryToSpaceFunction(BaseModel):
+        function_type: Literal["move_item_from_inventory_to_space"]
+        item_name: str = Field(description="要從庫存中取出並放置到空間的物品名稱。用於 NPC 將物品從庫存中拿出並放置在當前空間時，例如：放下背包、擺放物品。")
+    
+    class DeleteMultipleAndCreateMultipleFunction(BaseModel):
+        function_type: Literal["delete_multiple_and_create_multiple"]
+        delete_item_1: str = Field(description="要刪除的第一個物品名稱（必填）。此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。例如：砍樹時，delete_item_1 為「樹」。")
+        delete_item_2: Optional[str] = Field(None, description="要刪除的第二個物品名稱（可選）。例如：烹飪時，delete_item_2 可能是「雞蛋」。")
+        delete_item_3: Optional[str] = Field(None, description="要刪除的第三個物品名稱（可選）。例如：烹飪時，delete_item_3 可能是「麵粉」。")
+        delete_item_4: Optional[str] = Field(None, description="要刪除的第四個物品名稱（可選）。例如：烹飪時，delete_item_4 可能是「糖」。")
+        delete_item_5: Optional[str] = Field(None, description="要刪除的第五個物品名稱（可選）。例如：烹飪時，delete_item_5 可能是「鹽」。")
+        
+        create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。例如：砍樹時，create_item_1 可能是「木材」。")
+        create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一塊粗糙的木材，可用於建造或製作工具。」")
+        create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：砍樹時，create_item_2 可能是「樹枝」。")
+        create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「一些細長的樹枝，可用於生火或簡單工藝。」")
+        create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：砍樹時，create_item_3 可能是「樹葉」。")
+        create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「一堆綠色的樹葉，可用於裝飾或製作草藥。」")
+        create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
+        create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
+        create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
+        create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
     
     class GeneralResponse(BaseModel):
-        reasoning: str = Field(description="系統對 NPC 行為的內部分析和思考")
+        reasoning: str = Field(description="""
+        系統對 NPC 行為的內部分析和思考。請詳細分析 NPC 的互動意圖，考慮物品的性質、位置和可能的變化。
+        例如：
+        - 當 NPC 從冰箱拿飲料時：「NPC 想從冰箱取出飲料，這是一個從儲存空間獲取物品的行為，應該創建一個新的飲料物品。」
+        - 當 NPC 砍樹時：「NPC 正在砍伐樹木，這會導致樹被移除，並產生木材、樹枝等新物品。應該刪除樹並創建多個新物品。」
+        - 當 NPC 烹飪時：「NPC 正在使用鍋子和多種食材烹飪，這會消耗食材並產生新的料理。應該保留鍋子，刪除食材，並創建新的料理物品。」
+        """)
+        
         function: Optional[Union[
-            "AI_System.CreateItemFunction",
+            "AI_System.CreateItemsFunction",
             "AI_System.DeleteItemFunction",
             "AI_System.ChangeItemDescriptionFunction",
             "AI_System.DeleteAndCreateNewItemFunction",
-            "AI_System.MoveItemToInventoryFunction"
-        ]] = None
-        response_to_AI: str = Field(description="系統對 NPC 的回應，描述行為結果")
-    
+            "AI_System.MoveItemToInventoryFunction",
+            "AI_System.MoveItemFromInventoryToSpaceFunction",
+            "AI_System.DeleteMultipleAndCreateMultipleFunction"
+        ]] = Field(None, description="""
+        根據 NPC 的互動意圖選擇適當的功能。不同場景應使用不同功能：
+        
+        1. 從儲存空間取出物品（如冰箱拿飲料或多種食材）：使用 CreateItemsFunction
+           例：NPC 從冰箱拿出可樂 → CreateItemsFunction(create_item_1="可樂", create_item_1_description="冰涼的可樂", ...)
+           例：NPC 從冰箱拿出多種食材 → CreateItemsFunction(create_item_1="雞肉", create_item_2="蔬菜", ...)
+        
+        2. 撿起空間中的物品：使用 MoveItemToInventoryFunction
+           例：NPC 撿起鑰匙 → MoveItemToInventoryFunction(item_name="鑰匙")
+        
+        3. 放下庫存中的物品：使用 MoveItemFromInventoryToSpaceFunction
+           例：NPC 放下背包 → MoveItemFromInventoryToSpaceFunction(item_name="背包")
+        
+        4. 物品狀態變化但不需替換：使用 ChangeItemDescriptionFunction
+           例：NPC 使用杯子裝水 → ChangeItemDescriptionFunction(item_name="杯子", new_description="裝滿水的杯子")
+        
+        5. 單一物品轉換為另一物品：使用 DeleteAndCreateNewItemFunction
+           例：NPC 修理破損物品 → DeleteAndCreateNewItemFunction(old_item_name="破損手錶", new_item_name="修好的手錶", ...)
+        
+        6. 複雜互動（如砍樹、烹飪、合成）：使用 DeleteMultipleAndCreateMultipleFunction
+           例：NPC 砍樹 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="樹", create_item_1="木材", create_item_2="樹枝", ...)
+           例：NPC 烹飪 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="雞肉", delete_item_2="蔬菜", create_item_1="炒雞肉", ...)
+        
+        7. 消耗或丟棄單一物品：使用 DeleteItemFunction
+           例：NPC 吃掉蘋果 → DeleteItemFunction(item_name="蘋果")
+        """)
+        
+        response_to_AI: str = Field(description="""
+        系統對 NPC 的回應，描述行為結果。請使用生動、具體的語言描述 NPC 互動的結果和世界狀態的變化。
+        例如：
+        - 當 NPC 從冰箱拿飲料時：「你打開冰箱，拿出一瓶冰涼的可樂。冰涼的觸感讓你感到舒爽。」
+        - 當 NPC 砍樹時：「你用力砍倒了這棵樹。樹倒下後，你收集了幾塊優質木材和一些樹枝。」
+        - 當 NPC 烹飪時：「你熟練地將雞肉和蔬菜放入鍋中翻炒，很快一盤香噴噴的炒雞肉就做好了。廚房裡彌漫著誘人的香氣。」
+        - 當 NPC 使用電腦時：「你打開電腦，開始瀏覽網頁。屏幕的藍光照亮了你的臉龐，你感到沉浸在信息的海洋中。」
+        """)
+
+
+    def update_schema(self, available_items: List[str], inventory_items: List[str]):
+        """
+        動態生成 AI_System 的回應模式，根據當前 NPC 正在使用的物品列表限制 Literal 選項。
+        
+        Args:
+            available_items: 當前 NPC 可用的物品列表（包含空間中和庫存中的物品）。
+            inventory_items: 當前 NPC 庫存中的物品列表。
+        
+        Returns:
+            GeneralResponse: 動態生成的回應模式類別。
+        """
+        from typing import Literal, Optional, Union
+        from pydantic import BaseModel, Field
+
+        class CreateItemsFunction(BaseModel):
+            function_type: Literal["create_items"]
+            create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。用於從儲存空間（如冰箱、櫃子）取出物品時，或其他需要創建物品的場景。例如：從冰箱拿出飲料，create_item_1 為「飲料」。")
+            create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一瓶冰涼的可樂，剛從冰箱拿出來，表面有冷凝水珠。」")
+            create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_2 為「蔬菜」。")
+            create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「新鮮的蔬菜，包括胡蘿蔔、青椒和洋蔥。」")
+            create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_3 為「調味料」。")
+            create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「各種烹飪用的調味料，包括鹽、胡椒和香草。」")
+            create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
+            create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
+            create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
+            create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
+        
+        class DeleteItemFunction(BaseModel):
+            function_type: Literal["delete_item"]
+            item_name: Literal[*available_items] if available_items else str = Field(description="要刪除的物品名稱。僅用於刪除單一物品，例如 NPC 丟棄或消耗物品時。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
+        
+        class ChangeItemDescriptionFunction(BaseModel):
+            function_type: Literal["change_item_description"]
+            item_name: Literal[*available_items] if available_items else str = Field(description="要修改描述的物品名稱。用於物品狀態變化但不需要創建新物品時，例如：物品被使用後狀態改變、物品被修理或損壞。")
+            new_description: str = Field(description="物品的新描述，反映其當前狀態。例如：「杯子裡現在裝滿了水」或「手機屏幕有了裂痕」。")
+        
+        class DeleteAndCreateNewItemFunction(BaseModel):
+            function_type: Literal["delete_and_create_new_item"]
+            old_item_name: Literal[*available_items] if available_items else str = Field(description="要替換的物品名稱。用於物品轉換為另一個物品的場景，例如：烹飪食材變成料理、修理破損物品、或物品狀態顯著改變需要替換。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
+            new_item_name: str = Field(description="新物品的名稱。例如：將「生雞肉」烹飪後變成「烤雞」。")
+            new_description: str = Field(description="新物品的詳細描述。例如：「一盤香噴噴的烤雞，表面金黃酥脆，肉質鮮嫩多汁。」")
+        
+        class MoveItemToInventoryFunction(BaseModel):
+            function_type: Literal["move_item_to_inventory"]
+            item_name: Literal[*available_items] if available_items else str = Field(description="要移動的物品名稱。用於 NPC 撿起或收集空間中的物品時，例如：撿起地上的鑰匙、從桌上拿起書本。")
+        
+        class MoveItemFromInventoryToSpaceFunction(BaseModel):
+            function_type: Literal["move_item_from_inventory_to_space"]
+            item_name: Literal[*inventory_items] if inventory_items else str = Field(description="要從庫存中取出並放置到空間的物品名稱。用於 NPC 將物品從庫存中拿出並放置在當前空間時，例如：放下背包、擺放物品。")
+        
+        class DeleteMultipleAndCreateMultipleFunction(BaseModel):
+            function_type: Literal["delete_multiple_and_create_multiple"]
+            delete_item_1: Literal[*available_items] if available_items else str = Field(description="要刪除的第一個物品名稱（必填）。此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。例如：砍樹時，delete_item_1 為「樹」。")
+            delete_item_2: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第二個物品名稱（可選）。例如：烹飪時，delete_item_2 可能是「雞蛋」。")
+            delete_item_3: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第三個物品名稱（可選）。例如：烹飪時，delete_item_3 可能是「麵粉」。")
+            delete_item_4: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第四個物品名稱（可選）。例如：烹飪時，delete_item_4 可能是「糖」。")
+            delete_item_5: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第五個物品名稱（可選）。例如：烹飪時，delete_item_5 可能是「鹽」。")
+            
+            create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。例如：砍樹時，create_item_1 可能是「木材」。")
+            create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一塊粗糙的木材，可用於建造或製作工具。」")
+            create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：砍樹時，create_item_2 可能是「樹枝」。")
+            create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「一些細長的樹枝，可用於生火或簡單工藝。」")
+            create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：砍樹時，create_item_3 可能是「樹葉」。")
+            create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「一堆綠色的樹葉，可用於裝飾或製作草藥。」")
+            create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
+            create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
+            create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
+            create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
+        
+        class GeneralResponse(BaseModel):
+            reasoning: str = Field(description="""
+            系統對 NPC 行為的內部分析和思考。請詳細分析 NPC 的互動意圖，考慮物品的性質、位置和可能的變化。
+            例如：
+            - 當 NPC 從冰箱拿飲料時：「NPC 想從冰箱取出飲料，這是一個從儲存空間獲取物品的行為，應該創建一個新的飲料物品。」
+            - 當 NPC 砍樹時：「NPC 正在砍伐樹木，這會導致樹被移除，並產生木材、樹枝等新物品。應該刪除樹並創建多個新物品。」
+            - 當 NPC 烹飪時：「NPC 正在使用鍋子和多種食材烹飪，這會消耗食材並產生新的料理。應該保留鍋子，刪除食材，並創建新的料理物品。」
+            """)
+            
+            function: Optional[Union[
+                CreateItemsFunction,
+                DeleteItemFunction,
+                ChangeItemDescriptionFunction,
+                DeleteAndCreateNewItemFunction,
+                MoveItemToInventoryFunction,
+                MoveItemFromInventoryToSpaceFunction,
+                DeleteMultipleAndCreateMultipleFunction
+            ]] = Field(None, description="""
+            根據 NPC 的互動意圖選擇適當的功能。不同場景應使用不同功能：
+            
+            1. 從儲存空間取出物品（如冰箱拿飲料或多種食材）：使用 CreateItemsFunction
+            例：NPC 從冰箱拿出可樂 → CreateItemsFunction(create_item_1="可樂", create_item_1_description="冰涼的可樂", ...)
+            例：NPC 從冰箱拿出多種食材 → CreateItemsFunction(create_item_1="雞肉", create_item_2="蔬菜", ...)
+            
+            2. 撿起空間中的物品：使用 MoveItemToInventoryFunction
+            例：NPC 撿起鑰匙 → MoveItemToInventoryFunction(item_name="鑰匙")
+            
+            3. 放下庫存中的物品：使用 MoveItemFromInventoryToSpaceFunction
+            例：NPC 放下背包 → MoveItemFromInventoryToSpaceFunction(item_name="背包")
+            
+            4. 物品狀態變化但不需替換：使用 ChangeItemDescriptionFunction
+            例：NPC 使用杯子裝水 → ChangeItemDescriptionFunction(item_name="杯子", new_description="裝滿水的杯子")
+            
+            5. 單一物品轉換為另一物品：使用 DeleteAndCreateNewItemFunction
+            例：NPC 修理破損物品 → DeleteAndCreateNewItemFunction(old_item_name="破損手錶", new_item_name="修好的手錶", ...)
+            
+            6. 複雜互動（如砍樹、烹飪、合成）：使用 DeleteMultipleAndCreateMultipleFunction
+            例：NPC 砍樹 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="樹", create_item_1="木材", create_item_2="樹枝", ...)
+            例：NPC 烹飪 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="雞肉", delete_item_2="蔬菜", create_item_1="炒雞肉", ...)
+            
+            7. 消耗或丟棄單一物品：使用 DeleteItemFunction
+            例：NPC 吃掉蘋果 → DeleteItemFunction(item_name="蘋果")
+            """)
+            
+            response_to_AI: str = Field(description="""
+            系統對 NPC 的回應，描述行為結果。請使用生動、具體的語言描述 NPC 互動的結果和世界狀態的變化。
+            例如：
+            - 當 NPC 從冰箱拿飲料時：「你打開冰箱，拿出一瓶冰涼的可樂。冰涼的觸感讓你感到舒爽。」
+            - 當 NPC 砍樹時：「你用力砍倒了這棵樹。樹倒下後，你收集了幾塊優質木材和一些樹枝。」
+            - 當 NPC 烹飪時：「你熟練地將雞肉和蔬菜放入鍋中翻炒，很快一盤香噴噴的炒雞肉就做好了。廚房裡彌漫著誘人的香氣。」
+            - 當 NPC 使用電腦時：「你打開電腦，開始瀏覽網頁。屏幕的藍光照亮了你的臉龐，你感到沉浸在信息的海洋中。」
+            """)
+        
+        return GeneralResponse
+
+
+
     def initialize_world(self, world: Dict[str, Any]):
         """
         初始化系統並儲存世界狀態的引用。
