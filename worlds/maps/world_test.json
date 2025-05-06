@@ -545,7 +545,7 @@
     {
       "name": "alex",
       "description": "你是一個膽小的廚師助理，對廚藝有著深厚的了解。",
-      "starting_space": "kitchen",
+      "starting_space": "study",
       "inventory": [],
       "history": [
         {

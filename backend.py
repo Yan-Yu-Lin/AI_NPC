@@ -188,6 +188,9 @@ class NPC(BaseModel):
     move_target: Optional[List[int]] = None  # 改為列表而不是元組
     move_speed: Optional[int] = None
     waiting_interaction: Optional[Dict[str, Any]] = None
+    is_thinking: bool = False  # 新增：標記NPC是否正在思考
+    thinking_status: str = ""  # 新增：儲存NPC最近的思考內容
+    action_status: str = ""    # 新增：儲存NPC最近的行動內容
 
     # Initial schema definitions
     class EnterSpaceAction(BaseModel):
@@ -637,8 +640,14 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
                 current_space = starting_space,
                 inventory = inventory,
                 history = npc_data.get("history", []),
-                display_pos = list(npc_pos),  # 轉換為列表
-                position = list(npc_pos)  # 轉換為列表
+                display_pos = npc_data.get("display_pos", list(npc_pos)),
+                position = npc_data.get("position", list(npc_pos)),
+                move_target = npc_data.get("move_target", None),
+                move_speed = npc_data.get("move_speed", 2),
+                display_color = npc_data.get("display_color", None),
+                radius = npc_data.get("radius", 15),
+                is_thinking = npc_data.get("is_thinking", False),
+                first_tick = npc_data.get("first_tick", True)
             )
 
             # 將 NPC 添加到其起始空間
@@ -771,7 +780,9 @@ def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
                 "name": space.name,
                 "description": space.description,
                 "connected_spaces": [connected.name for connected in space.connected_spaces],
-                "items": [item.name for item in space.items]
+                "items": [item.name for item in space.items],
+                "space_positions": space.display_pos,
+                "space_size": space.display_size
                 # NPC 單獨處理
             }
             world_data["spaces"].append(space_data)
@@ -794,7 +805,15 @@ def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
                 "description": npc.description,
                 "starting_space": npc.current_space.name,
                 "inventory": [item.name for item in npc.inventory.items],
-                "history": npc.history  # 保存 NPC 的記憶/歷史記錄
+                "history": npc.history,  # 保存 NPC 的記憶/歷史記錄
+                "position": npc.position,  # 保存 NPC 的位置
+                "display_pos": npc.display_pos,  # 保存 NPC 的顯示位置
+                "move_target": npc.move_target,  # 保存 NPC 的移動目標
+                "move_speed": npc.move_speed,  # 保存 NPC 的移動速度
+                "display_color": npc.display_color,  # 保存 NPC 的顯示顏色
+                "radius": npc.radius,  # 保存 NPC 的半徑
+                "is_thinking": npc.is_thinking,  # 保存 NPC 是否正在思考
+                "first_tick": npc.first_tick  # 保存 NPC 是否是第一次 tick
             }
             world_data["npcs"].append(npc_data)
 
@@ -835,7 +854,7 @@ def prompt_for_save_location(original_file_path: str) -> str:
         user_input += '.json'
 
     # Return the new file path
-    return os.path.join("worlds", user_input)
+    return os.path.join("worlds/maps", user_input)
 
 #NOTE: Main Loop
 def SandBox():

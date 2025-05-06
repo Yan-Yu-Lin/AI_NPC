@@ -15,13 +15,29 @@
         "table_living_room",
         "sofa",
         "piano"
+      ],
+      "space_positions": [
+        8,
+        8
+      ],
+      "space_size": [
+        507,
+        445
       ]
     },
     {
       "name": "living_room2",
       "description": "一個優雅的客廳，陽光透過高大的窗戶灑落，使華麗的音樂盒閃閃發光。一面美麗的鏡子立在角落，為房間增添深度。",
       "connected_spaces": [],
-      "items": []
+      "items": [],
+      "space_positions": [
+        276,
+        453
+      ],
+      "space_size": [
+        239,
+        305
+      ]
     },
     {
       "name": "study",
@@ -33,6 +49,14 @@
         "pencil",
         "table_study",
         "bookshelf"
+      ],
+      "space_positions": [
+        523,
+        439
+      ],
+      "space_size": [
+        323,
+        320
       ]
     },
     {
@@ -45,6 +69,14 @@
         "knife",
         "sink",
         "refrigerator"
+      ],
+      "space_positions": [
+        8,
+        461
+      ],
+      "space_size": [
+        260,
+        298
       ]
     },
     {
@@ -58,6 +90,14 @@
         "pen",
         "diary",
         "table_bedroom"
+      ],
+      "space_positions": [
+        523,
+        8
+      ],
+      "space_size": [
+        323,
+        320
       ]
     },
     {
@@ -69,6 +109,14 @@
       "items": [
         "bathtub",
         "shower"
+      ],
+      "space_positions": [
+        854,
+        8
+      ],
+      "space_size": [
+        270,
+        230
       ]
     },
     {
@@ -80,6 +128,14 @@
       "items": [
         "tissue",
         "toilet"
+      ],
+      "space_positions": [
+        970,
+        246
+      ],
+      "space_size": [
+        155,
+        184
       ]
     },
     {
@@ -93,13 +149,29 @@
         "toilet",
         "balcony"
       ],
-      "items": []
+      "items": [],
+      "space_positions": [
+        523,
+        336
+      ],
+      "space_size": [
+        330,
+        94
+      ]
     },
     {
       "name": "corridor2",
       "description": "一個長長的走廊，白色牆壁和明亮的燈光創造了明亮的氛圍。",
       "connected_spaces": [],
-      "items": []
+      "items": [],
+      "space_positions": [
+        854,
+        246
+      ],
+      "space_size": [
+        108,
+        184
+      ]
     },
     {
       "name": "balcony",
@@ -107,7 +179,15 @@
       "connected_spaces": [
         "corridor"
       ],
-      "items": []
+      "items": [],
+      "space_positions": [
+        854,
+        439
+      ],
+      "space_size": [
+        270,
+        320
+      ]
     }
   ],
   "items": [
@@ -405,7 +485,25 @@
           "role": "assistant",
           "content": "我發現自己在這座有趣的房子裡。我應該探索並與我發現的東西互動。我想探索其他空間"
         }
-      ]
+      ],
+      "position": [
+        261,
+        230
+      ],
+      "display_pos": [
+        261,
+        230
+      ],
+      "move_target": null,
+      "move_speed": 2,
+      "display_color": [
+        255,
+        0,
+        0
+      ],
+      "radius": 24,
+      "is_thinking": false,
+      "first_tick": true
     },
     {
       "name": "neo",
@@ -421,7 +519,25 @@
           "role": "assistant",
           "content": "我發現自己在這座有趣的房子裡。我應該探索並與我發現的東西互動。我想探索其他空間"
         }
-      ]
+      ],
+      "position": [
+        138,
+        610
+      ],
+      "display_pos": [
+        138,
+        610
+      ],
+      "move_target": null,
+      "move_speed": 2,
+      "display_color": [
+        0,
+        128,
+        255
+      ],
+      "radius": 24,
+      "is_thinking": false,
+      "first_tick": true
     },
     {
       "name": "alex",
@@ -437,7 +553,25 @@
           "role": "assistant",
           "content": "我是亞瑟，一個廚師助理，正在探索房子的廚房。\n\n我應該探索並與我發現的東西互動。\n我想探索其他空間"
         }
-      ]
+      ],
+      "position": [
+        684,
+        599
+      ],
+      "display_pos": [
+        684,
+        599
+      ],
+      "move_target": null,
+      "move_speed": 2,
+      "display_color": [
+        0,
+        200,
+        0
+      ],
+      "radius": 24,
+      "is_thinking": false,
+      "first_tick": true
     }
   ]
 }

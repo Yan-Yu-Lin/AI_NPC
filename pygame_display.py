@@ -2,6 +2,7 @@ import pygame
 import threading
 import math
 import os
+import time
 from backend import save_world_to_json
 
 # 圖片快取，避免重複載入
@@ -176,44 +177,57 @@ def run_pygame_demo(world):
     ai_thinking = False
     ai_threading = None
     ai_running = False
+    npc_threads = []  # 新增：用於追蹤所有 NPC 執行緒
 
     def ai_process():
-        nonlocal last_ai_result, ai_thinking, ai_running
+        nonlocal last_ai_result, ai_thinking, ai_running, npc_threads
         ai_running = True
         ai_thinking = True
-        last_ai_result = active_npc.process_tick() if active_npc else ""
+        
+        # 清空現有執行緒列表
+        for t in npc_threads:
+            if t.is_alive():
+                print(f"等待執行緒結束...")
+                t.join(0.5)  # 等待最多0.5秒
+        npc_threads.clear()
+        
+        # 在主控 NPC 處理前先處理其他 NPC
+        for i, npc in enumerate(npcs):
+                # 標記當前 NPC 處於思考狀態
+                npc.is_thinking = True
+                npc.thinking_status = f"{npc.name} 處理中..."  # 修改 NPC 狀態
+                
+                # 定義處理單個 NPC 的函數
+                def process_single_npc(npc_id, npc_ref):
+                    try:
+                        this_npc_name = npc_ref.name  # 保存當前 NPC 名稱
+                        print(f"執行緒 {npc_id}: 開始處理 {this_npc_name}...")
+                        
+                        # 處理當前 NPC
+                        result = npc_ref.process_tick()
+                        
+                        # 更新 NPC 狀態
+                        npc_ref.is_thinking = False
+                        npc_ref.thinking_status = f"{this_npc_name}: {result[:50]}" + ("..." if len(result) > 50 else "")
+                        
+                        print(f"執行緒 {npc_id}: 完成處理 {this_npc_name}: {result[:30]}...")
+                    except Exception as e:
+                        print(f"執行緒 {npc_id}: 處理 {npc_ref.name} 失敗: {str(e)}")
+                        npc_ref.is_thinking = False
+                        npc_ref.thinking_status = f"{npc_ref.name}: 處理失敗"
+                
+                # 創建並啟動執行緒，確保每個執行緒有自己的 NPC 參考
+                t = threading.Thread(target=process_single_npc, args=(i, npc))
+                t.daemon = True  # 設定為守護執行緒
+                npc_threads.append(t)
+                t.start()
+                print(f"已啟動執行緒 {i} 用於處理 {npc.name}")
+        # 等待所有執行緒完成
+        time.sleep(0.1)  
+        
         ai_thinking = False
         ai_running = False
-
-    def draw_text_input_box(screen, prompt, font, input_text, rect):
-        pygame.draw.rect(screen, (255, 255, 255), rect)
-        pygame.draw.rect(screen, (0, 0, 0), rect, 2)
-        txt = font.render(prompt + input_text, True, (0, 0, 0))
-        screen.blit(txt, (rect.x + 5, rect.y + 5))
-
-    def get_text_input(screen, prompt, font, rect, default_text=""):
-        input_text = default_text
-        active = True
-        while active:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return None
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN:
-                        active = False
-                    elif event.key == pygame.K_BACKSPACE:
-                        input_text = input_text[:-1]
-                    elif event.key == pygame.K_ESCAPE:
-                        return None
-                    else:
-                        # 避免輸入不可見字元
-                        if len(event.unicode) == 1 and (32 <= ord(event.unicode) <= 126 or ord(event.unicode) > 127):
-                            input_text += event.unicode
-            screen.fill((200, 200, 200))
-            draw_text_input_box(screen, prompt, font, input_text, rect)
-            pygame.display.flip()
-        return input_text.strip()
-
+        
     def save_menu(screen, font, world, original_path):
         menu_items = ["直接存檔", "另存新檔", "取消"]
         selected = 0
@@ -305,17 +319,106 @@ def run_pygame_demo(world):
             input_rect = pygame.Rect(100, 320, 400, 50)
             import os
             default_name = os.path.basename(original_path) if original_path else "new_save.json"
-            filename = get_text_input(screen, "輸入新檔名: ", font, input_rect, default_text=default_name)
-            if filename:
+            
+            # 初始化輸入框和按鈕
+            input_text = default_name
+            confirm_button = pygame.Rect(100, 390, 150, 50)  # 確認按鈕
+            cancel_button = pygame.Rect(350, 390, 150, 50)   # 取消按鈕
+            
+            input_active = True
+            button_hovered = None
+            mouse_down = False
+            save_action = False
+            
+            while input_active:
+                mouse_pos = pygame.mouse.get_pos()
+                
+                # 檢查按鈕懸停
+                if confirm_button.collidepoint(mouse_pos):
+                    button_hovered = "confirm"
+                elif cancel_button.collidepoint(mouse_pos):
+                    button_hovered = "cancel"
+                else:
+                    button_hovered = None
+                
+                # 處理事件
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        return
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_RETURN:  # 按 Enter 確認
+                            if input_text.strip():
+                                input_active = False
+                                save_action = True
+                        elif event.key == pygame.K_BACKSPACE:  # 刪除字元
+                            input_text = input_text[:-1]
+                        elif event.key == pygame.K_ESCAPE:  # 按 Esc 取消
+                            input_active = False
+                            save_action = False
+                        else:  # 輸入字元
+                            # 避免輸入不可見字元
+                            if len(event.unicode) == 1 and (32 <= ord(event.unicode) <= 126 or ord(event.unicode) > 127):
+                                input_text += event.unicode
+                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                        mouse_down = True
+                    elif event.type == pygame.MOUSEBUTTONUP:
+                        if mouse_down:
+                            if button_hovered == "confirm" and input_text.strip():  # 點擊確認按鈕
+                                input_active = False
+                                save_action = True
+                            elif button_hovered == "cancel":  # 點擊取消按鈕
+                                input_active = False
+                                save_action = False
+                        mouse_down = False
+                
+                # 繪製畫面
+                screen.fill((180, 180, 180))
+                
+                # 繪製輸入標題
+                title_text = font.render("輸入新檔名:", True, (0, 0, 0))
+                screen.blit(title_text, (100, 280))
+                
+                # 繪製輸入框
+                pygame.draw.rect(screen, (255, 255, 255), input_rect)
+                text_surface = font.render(input_text, True, (0, 0, 0))
+                screen.blit(text_surface, (input_rect.x + 5, input_rect.y + 12))
+                
+                # 繪製確認按鈕
+                if button_hovered == "confirm" and mouse_down:  # 點擊狀態
+                    confirm_color = (100, 200, 100)
+                elif button_hovered == "confirm":  # 懸停狀態
+                    confirm_color = (150, 255, 150)
+                else:  # 正常狀態
+                    confirm_color = (120, 220, 120)
+                pygame.draw.rect(screen, confirm_color, confirm_button)
+                confirm_text = font.render("確認", True, (0, 0, 0))
+                screen.blit(confirm_text, (confirm_button.x + 50, confirm_button.y + 15))
+                
+                # 繪製取消按鈕
+                if button_hovered == "cancel" and mouse_down:  # 點擊狀態
+                    cancel_color = (200, 100, 100)
+                elif button_hovered == "cancel":  # 懸停狀態
+                    cancel_color = (255, 150, 150)
+                else:  # 正常狀態
+                    cancel_color = (220, 120, 120)
+                pygame.draw.rect(screen, cancel_color, cancel_button)
+                cancel_text = font.render("取消", True, (0, 0, 0))
+                screen.blit(cancel_text, (cancel_button.x + 50, cancel_button.y + 15))
+                
+                pygame.display.flip()
+            
+            # 處理存檔動作
+            if save_action:
+                filename = input_text.strip()
                 if not filename.lower().endswith('.json'):
                     filename += ".json"
-                new_path = os.path.join("worlds", filename)
+                new_path = os.path.join("worlds/maps", filename)
                 save_world_to_json(world, new_path)
         # 取消則不做事
 
     def npc_selection_menu(screen, font, npcs, active_npc):
         if not npcs or len(npcs) <= 1:
-            return active_npc  # 如果沒有NPC或只有一個NPC，不需要切換
+            return active_npc  # 如果沒有 NPC 或只有一個 NPC，不需要切換
 
         # 設定視窗大小和位置
         screen_w, screen_h = screen.get_size()
@@ -328,19 +431,19 @@ def run_pygame_demo(world):
         title = font.render("選擇要關注的 NPC", True, (255, 255, 255))
         close_btn = pygame.Rect(menu_rect.x + menu_rect.width - 90, menu_rect.y + 5, 80, 32)
 
-        # 初始化選中的NPC為當前活動的NPC
+        # 初始化選中的 NPC 為當前活動的 NPC
         selected_npc = active_npc
         selected_index = npcs.index(active_npc) if active_npc in npcs else 0
 
-        # 顯示NPC列表的參數
-        line_height = 50  # 每個NPC項目的高度
-        npc_buttons = []  # 儲存NPC按鈕的矩形
-        visible_items = min(len(npcs), (menu_h - 100) // line_height)  # 可見NPC數量
+        # 顯示 NPC 列表的參數
+        line_height = 50  # 每個 NPC 項目的高度
+        npc_buttons = []  # 儲存 NPC 按鈕的矩形
+        visible_items = min(len(npcs), (menu_h - 100) // line_height)  # 可見 NPC 數量
 
         running = True
         while running:
             mouse_pos = pygame.mouse.get_pos()
-            mouse_pressed = pygame.mouse.get_pressed()[0]  # 左鍵
+            mouse_pressed = pygame.mouse.get_pressed()[0]
 
             # 繪製背景和標題
             pygame.draw.rect(screen, (220, 220, 220), menu_rect)  # 主背景色改為淺灰白
@@ -351,7 +454,7 @@ def run_pygame_demo(world):
             clip_rect = pygame.Rect(menu_rect.x, menu_rect.y + 40, menu_rect.width, menu_rect.height - 80)
             screen.set_clip(clip_rect)
 
-            # 繪製NPC列表
+            # 繪製 NPC 列表
             npc_buttons.clear()
             for i, npc in enumerate(npcs):
                 # 計算按鈕位置
@@ -364,7 +467,7 @@ def run_pygame_demo(world):
                 npc_buttons.append(btn_rect)
 
                 # 決定按鈕顏色
-                if npc == selected_npc:  # 當前選中的NPC
+                if npc == selected_npc:  # 當前選中的 NPC
                     bg_color = (220, 220, 255)  # 淺藍背景
                     text_color = (0, 0, 200)     # 深藍文字
                     border_color = (100, 100, 200)  # 藍色邊框
@@ -381,7 +484,7 @@ def run_pygame_demo(world):
                 pygame.draw.rect(screen, bg_color, btn_rect, border_radius=5)
                 pygame.draw.rect(screen, border_color, btn_rect, 2, border_radius=5)  # 邊框
 
-                # 繪製NPC名稱和描述
+                # 繪製 NPC 名稱和描述
                 npc_name = font.render(npc.name, True, text_color)
                 screen.blit(npc_name, (btn_rect.x + 10, btn_rect.y))
 
@@ -419,15 +522,15 @@ def run_pygame_demo(world):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                    return active_npc  # 保持原來的NPC
+                    return active_npc  # 保持原來的 NPC
 
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         running = False
-                        return active_npc  # 取消，返回原NPC
+                        return active_npc  # 取消，返回原 NPC
                     elif event.key == pygame.K_RETURN:
                         running = False
-                        return selected_npc  # 確認，返回選中的NPC
+                        return selected_npc  # 確認，返回選中的 NPC
                     elif event.key == pygame.K_UP and selected_index > 0:   # 上移選項
                         selected_index -= 1
                         selected_npc = npcs[selected_index]
@@ -438,22 +541,18 @@ def run_pygame_demo(world):
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if cancel_btn.collidepoint(mouse_pos):
                         running = False
-                        return active_npc  # 取消，返回原NPC
+                        return active_npc  # 取消，返回原 NPC
 
                     elif confirm_btn.collidepoint(mouse_pos):
                         running = False
-                        return selected_npc  # 確認，返回選中的NPC
+                        return selected_npc  # 確認，返回選中的 NPC
 
-                    # 檢查是否點擊了NPC按鈕
+                    # 檢查是否點擊了 NPC 按鈕
                     for i, btn in enumerate(npc_buttons):
                         if btn.collidepoint(mouse_pos):
                             selected_index = i
                             selected_npc = npcs[i]
-                            # 雙擊選擇並確認
-                            if event.button == 1 and event.type == pygame.MOUSEBUTTONDOWN:  # 左鍵
-                                return selected_npc
-
-        return selected_npc  # 返回選中的NPC
+        return selected_npc  # 返回選中的 NPC
 
     def wrap_text(text, font, max_width):
         # 處理字元換行，避免超出指定的最大寬度
@@ -734,7 +833,7 @@ def run_pygame_demo(world):
             # 重設裁剪區域
             screen.set_clip(None)
 
-            # 繪製底部區域（避免內容溢出）
+            # 繪製底部區域
             pygame.draw.rect(screen, (220, 220, 220), (menu_rect.x, menu_rect.y + menu_rect.height - 40, menu_rect.width, 40))
 
             # 繪製關閉按鈕 - 移到這裡確保它不會被其他元素覆蓋
@@ -798,7 +897,7 @@ def run_pygame_demo(world):
                     running = False
                 # 新增：S鍵觸發存檔選單
                 elif event.key == pygame.K_s:
-                    save_menu(screen, font, world, world.get('_file_path', None) or "worlds/unnamed_save.json")
+                    save_menu(screen, font, world, world.get('_file_path', None) or "worlds/maps/unnamed_save.json")
                 # 新增：P鍵觸發歷史記錄選單
                 elif event.key == pygame.K_p:
                     history_menu(screen, font, active_npc)
@@ -843,7 +942,7 @@ def run_pygame_demo(world):
                     if rect.collidepoint(event.pos) and key == "p":
                         history_menu(screen, font, active_npc)
                     if rect.collidepoint(event.pos) and key == "s":
-                        save_menu(screen, font, world, world.get('_file_path', None) or "worlds/unnamed_save.json")
+                        save_menu(screen, font, world, world.get('_file_path', None) or "worlds/maps/unnamed_save.json")
                     # 新增：處理「切換NPC」按鈕
                     if rect.collidepoint(event.pos) and key == "n" and len(npcs) > 1:
                         new_active_npc = npc_selection_menu(screen, font, npcs, active_npc)
@@ -934,25 +1033,62 @@ def run_pygame_demo(world):
             pygame.draw.circle(screen, npc.display_color, (draw_x, draw_y), int(npc.radius * scale))
             npc_text = font.render(npc.name, True, (0,0,0))
             screen.blit(npc_text, (draw_x-16, draw_y-int(npc.radius*scale)-10))
-            # 聊天氣泡（只顯示 active_npc 的最新 AI 回覆）
-            if npc == active_npc and (last_ai_result or ai_thinking):
-                bubble_font = info_font
-                bubble_text = bubble_font.render(last_ai_result if not ai_thinking else "AI 思考中...", True, (0,0,0))
-                text_width = bubble_text.get_width()
-                text_height = bubble_text.get_height()
-                bubble_width = max(200, text_width + 20)
-                bubble_height = text_height + 20
-                bubble_rect = pygame.Rect(
-                    draw_x - bubble_width // 2,
-                    draw_y - int(npc.radius*scale) - bubble_height - 10,
-                    bubble_width,
-                    bubble_height
+            
+            # 聊天氣泡（為每個NPC都顯示）
+            bubble_font = info_font
+            
+            # 直接使用NPC的thinking_status（即self_talk_reasoning）
+            display_text = ""
+            
+            # 處理NPC的思考狀態
+            if npc.is_thinking:
+                display_text = f"{npc.name} 思考中..."
+            elif hasattr(npc, 'thinking_status') and npc.thinking_status:
+                # 處理NPC的思考狀態
+                if not npc.thinking_status.startswith(npc.name):
+                    display_text = f"{npc.name}: {npc.thinking_status}"
+                else:
+                    display_text = npc.thinking_status
+            else:
+                display_text = f"{npc.name} 閒置中"            
+            # 如果沒有內容則顯示預設文字
+            if not display_text:
+                display_text = f"{npc.name} 閒置中"
+                
+            # 限制文字長度，避免氣泡過大
+            if len(display_text) > 60:
+                display_text = display_text[:57] + "..."
+                
+            bubble_text = bubble_font.render(display_text, True, (0,0,0))
+                
+            text_width = bubble_text.get_width()
+            text_height = bubble_text.get_height()
+            bubble_width = max(200, text_width + 20)
+            bubble_height = text_height + 20
+            bubble_rect = pygame.Rect(
+                draw_x - bubble_width // 2,
+                draw_y - int(npc.radius*scale) - bubble_height - 10,
+                bubble_width,
+                bubble_height
+            )
+            
+            # 繪製氣泡（不再根據狀態變色）
+            bubble_surface = pygame.Surface((bubble_width, bubble_height), pygame.SRCALPHA)
+            bubble_surface.fill((255, 255, 255, 220))  # 統一使用白色半透明背景
+            screen.blit(bubble_surface, (bubble_rect.x, bubble_rect.y))
+            pygame.draw.rect(screen, (0, 0, 0), bubble_rect, width=2, border_radius=10)
+            screen.blit(bubble_text, (bubble_rect.x + 10, bubble_rect.y + 10))
+            
+            # 為當前活動NPC添加指示標記
+            if npc == active_npc:
+                active_marker_rect = pygame.Rect(
+                    draw_x - int(npc.radius*scale) - 10,
+                    draw_y - int(npc.radius*scale) - 10,
+                    int(npc.radius*scale*2) + 20,
+                    int(npc.radius*scale*2) + 20
                 )
-                bubble_surface = pygame.Surface((bubble_width, bubble_height), pygame.SRCALPHA)
-                bubble_surface.fill((255, 255, 255, 220))
-                screen.blit(bubble_surface, (bubble_rect.x, bubble_rect.y))
-                pygame.draw.rect(screen, (0, 0, 0), bubble_rect, width=2, border_radius=10)
-                screen.blit(bubble_text, (bubble_rect.x + 10, bubble_rect.y + 10))
+                pygame.draw.rect(screen, (255, 215, 0), active_marker_rect, width=3, border_radius=15)
+            
         # 畫互動按鈕
         button_w, button_h = 120, 44
         gap = 24

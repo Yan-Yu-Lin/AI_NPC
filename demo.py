@@ -631,7 +631,7 @@ def prompt_for_save_location(original_file_path: str) -> str:
         user_input += '.json'
     
     # Return the new file path
-    return os.path.join("worlds", user_input)
+    return os.path.join("worlds/maps", user_input)
 
 #NOTE: Main Loop
 def SandBox():
