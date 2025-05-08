@@ -8,8 +8,114 @@ import asyncio
 from dataclasses import dataclass, field as dataclass_field
 import heapq
 import sys
+import base64
+import re
 
 client = OpenAI()
+
+# --- Image Generation Helper Functions ---
+def get_picture_dir():
+    """Returns the absolute path to the 'worlds/picture' directory."""
+    # Assuming backend.py is in the project root or a known location relative to 'worlds/picture'
+    # This path needs to be robust. If backend.py can be run from different working directories,
+    # constructing paths relative to __file__ might be better, or using a config.
+    # For consistency with pygame_display.py, let's use a relative path from project root.
+    return os.path.join("worlds", "picture")
+
+def log_error(msg):
+    """Logs an error message to a file."""
+    try:
+        with open("image_generation_error.log", "a", encoding="utf-8") as logf:
+            logf.write(f"{msg}\n")
+    except Exception as e:
+        print(f"Failed to write to log_error file: {e}")
+
+def generate_image_and_save(item_obj: 'Item', filename: str) -> bool:
+    """
+    Generates an image for the given Item object using DALL-E and saves it.
+    Uses the globally defined 'client' for OpenAI API calls.
+
+    Args:
+        item_obj: The Item object to generate an image for.
+        filename: The filename (e.g., 'table.png') to save the image as in the picture directory.
+
+    Returns:
+        True if image generation and saving were successful, False otherwise.
+    """
+    try:
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            log_error("OPENAI_API_KEY environment variable not set. Cannot generate image.")
+            return False
+
+        prompt_parts = []
+        if item_obj.description:
+            prompt_parts.append(item_obj.description)
+        if item_obj.size:
+            prompt_parts.append("size: " + "x".join(str(s) for s in item_obj.size))
+        if item_obj.properties:
+            prop_str = ", ".join(f"{k}:{v}" for k, v in item_obj.properties.items())
+            if prop_str: # Ensure not empty string if properties dict is empty
+                prompt_parts.append("properties: " + prop_str)
+
+        # Enhanced fixed_style prompt from user's script
+        fixed_style = (
+            f"Only generate a single {item_obj.name} object. "
+            "The object must be perfectly centered in the image. "
+            "The perspective MUST be strictly top-down (bird's-eye view), looking directly from above, with NO tilt or angle. "
+            "ABSOLUTELY DO NOT include any background, color, shadow, border, accessories, decorations, text, environment, or any other objects. "
+            "The background MUST be 100% pure white or fully transparent, with nothing else visible. "
+            "Use natural, realistic colors for the object only. "
+            "The style must be pixel art, with a clear pixelated look and retro game aesthetics. "
+            "This image is for a realistic game, so the object should be as close to reality as possible, with realistic materials, textures, and details. "
+            "If the name contains spatial information, only show the object itself, do NOT show any spatial or environmental info. "
+            "NO background. NO shadow. NO border. NO other objects. NO accessories. NO decorations. NO text. NO environment. "
+            f"English: Strictly top-down view, only one {item_obj.name} object, perfectly centered, NO background, NO other objects, NO shadow, NO border, NO accessories, NO decorations, NO text, NO environment. Pixel art style. Object only."
+        )
+        
+        # Construct final prompt
+        base_prompt_elements = [item_obj.name] + prompt_parts
+        prompt = ", ".join(filter(None, base_prompt_elements)) + ". " + fixed_style
+        
+        print(f"Generating image for: '{item_obj.name}' with filename '{filename}'")
+        # print(f"Prompt: {prompt}") # Uncomment for debugging prompt
+
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            n=1,
+            size="1024x1024", # Ensure this size is supported and desired
+            response_format="b64_json"
+        )
+
+        if not response.data or not response.data[0].b64_json:
+            log_error(f"Image generation for '{filename}' returned no b64_json data. Prompt: {prompt}")
+            return False
+
+        image_base64 = response.data[0].b64_json
+        image_bytes = base64.b64decode(image_base64)
+        
+        save_dir = get_picture_dir()
+        os.makedirs(save_dir, exist_ok=True) # Ensure directory exists
+        save_path = os.path.join(save_dir, filename)
+        
+        with open(save_path, "wb") as f:
+            f.write(image_bytes)
+        print(f"Successfully generated and saved image: {save_path}")
+        return True
+
+    except openai.APIError as e:
+        err_msg = f"OpenAI API error during image generation for '{filename}': {e}"
+        print(err_msg)
+        log_error(err_msg)
+        return False
+    except Exception as e:
+        # Catching potential errors during base64 decode, file I/O, etc.
+        err_msg = f"Generic error during image generation or saving for '{filename}': {e}"
+        print(err_msg)
+        log_error(err_msg)
+        return False
+# --- End Image Generation Helper Functions ---
 
 # 設定全局變量使 NPC 類可以訪問
 world_system = None
@@ -237,7 +343,7 @@ class NPC(BaseModel):
             target_npc: Literal[*valid_npcs] if valid_npcs else str = Field(description="對話對象的名稱")
             dialogue: str = Field(description="想要說的話")
 
-        # 定義物品互動操作（新版本）
+        # 定義物品互動操作
         class InteractItemAction(BaseModel):
             action_type: Literal["interact_item"]
             interact_with: Literal[*available_items] if available_items else str = Field(description="要互動的物品名稱")
@@ -661,21 +767,57 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
     npcs = list(npcs_dict.values())
     items = list(items_dict.values())
     
-    # 為物品自動設定圖片路徑（如果尚未設定）
+    # --- Modified Image Handling Logic ---
+    picture_dir_path = get_picture_dir()
+    os.makedirs(picture_dir_path, exist_ok=True) # Ensure picture directory exists
+
     for item in items:
-        if not getattr(item, "image_path", None):
-            # 嘗試用物品名稱作為圖片檔名
-            item_name = getattr(item, "name", "").lower()
-            # 移除可能的前綴和後綴，只保留核心名稱
-            # 例如 table_living_room 變成 table
-            if "_" in item_name:
-                core_name = item_name.split("_")[0]
-                if os.path.exists(os.path.join("worlds", "picture", f"{core_name}.png")):
-                    item.image_path = f"{core_name}.png"
-                    continue
-            # 嘗試直接使用完整名稱
-            if os.path.exists(os.path.join("worlds", "picture", f"{item_name}.png")):
-                item.image_path = f"{item_name}.png"
+        item_name_lower = getattr(item, "name", "").lower()
+        determined_image_filename = None
+
+        # 1. If item.image_path is already set (e.g., from JSON item_data), respect it.
+        if getattr(item, "image_path", None):
+            determined_image_filename = item.image_path
+        # 2. If not set from JSON, try to derive it.
+        elif item_name_lower: # Only if item has a name
+            core_name_filename = None
+            if "_" in item_name_lower:
+                core_name = item_name_lower.split("_")[0]
+                core_name_filename = f"{core_name}.png"
+            
+            full_name_filename = f"{item_name_lower}.png"
+
+            # Check existence to assign preferred existing file
+            if core_name_filename and os.path.exists(os.path.join(picture_dir_path, core_name_filename)):
+                determined_image_filename = core_name_filename
+            elif os.path.exists(os.path.join(picture_dir_path, full_name_filename)):
+                determined_image_filename = full_name_filename
+            else:
+                # Neither exists, choose one for potential generation.
+                # Prefer simpler core_name if applicable, otherwise full name.
+                if core_name_filename:
+                    determined_image_filename = core_name_filename
+                else:
+                    determined_image_filename = full_name_filename
+            item.image_path = determined_image_filename # Assign determined filename to item
+        else:
+            item.image_path = None # No name, no image path
+
+        # 3. If a filename is determined, check existence and generate if missing.
+        if item.image_path: # This is the filename, e.g., "table.png"
+            full_target_path = os.path.join(picture_dir_path, item.image_path)
+            if not os.path.exists(full_target_path):
+                print(f"Image file '{item.image_path}' for item '{item.name}' not found at '{full_target_path}'. Attempting to generate...")
+                if generate_image_and_save(item, item.image_path): # Pass the Item object and the filename
+                    print(f"Successfully generated and saved '{item.image_path}'.")
+                else:
+                    print(f"Failed to generate '{item.image_path}'. Item will use placeholder or default drawing.")
+                    item.image_path = None # Nullify on failure so pygame_display handles it
+            # else: # File exists, item.image_path is correctly set
+                # print(f"Image file '{item.image_path}' for item '{item.name}' found at '{full_target_path}'.")
+        # else: # item.image_path is None (no item name, or not specified and couldn't be derived)
+            # print(f"Item '{getattr(item, 'name', 'Unnamed Item')}' will not have a custom image.")
+    # --- End Modified Image Handling Logic ---
 
     return {
         "world_name": world_data.get("world_name", "未知世界"),
