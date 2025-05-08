@@ -4,56 +4,118 @@ import math
 import os
 import time
 from backend import save_world_to_json
+import base64
+from openai import OpenAI
+
+# Initialize OpenAI client
+client = OpenAI()
 
 # 圖片快取，避免重複載入
 item_image_cache = {}
 
+# Added generate_image function from user's script
+def generate_image(prompt_text: str, output_filename: str):
+    """Generates an image based on the prompt and saves it."""
+    try:
+        # NOTE: "gpt-image-1" and "background" are non-standard from user's script.
+        # If API errors occur, these might need to be changed to "dall-e-3"
+        # and background transparency handled via prompt or post-processing.
+        img = client.images.generate(
+            model = "gpt-image-1",
+            background = "transparent",
+            prompt = prompt_text,
+            n = 1,
+            size="1024x1024",
+        )
+        # Assuming the response structure has .data[0].b64_json
+        # User script had: image_bytes = base64.b64decode(img.data[0].b64_json)
+        # Need to ensure img.data[0] and b64_json attribute exist.
+        if img.data and len(img.data) > 0 and hasattr(img.data[0], 'b64_json') and img.data[0].b64_json:
+            image_bytes = base64.b64decode(img.data[0].b64_json)
+            with open(output_filename, "wb") as f:
+                f.write(image_bytes)
+            print(f"Image saved as {output_filename}")
+        else:
+            print(f"Error generating image for {output_filename}: No b64_json data in response.")
+            # Optionally, log this error or handle it more gracefully
+    except Exception as e:
+        print(f"An error occurred during image generation for {output_filename}: {e}")
+
 # 在適當的位置添加圖片載入功能
 def load_item_image(image_path):
-    """載入並返回物品圖片，主要從 worlds/picture 目錄加載"""
-    if not image_path:
-        return None
+    """載入並返回物品圖片，主要從 worlds/picture 目錄加載。
+    如果圖片不存在，則嘗試使用 generate_image 生成它。
+    """
+    if not image_path: # 如果 image_path 是 None 或空字串
+        # print("load_item_image: image_path is None or empty, returning placeholder.") # Debugging line
+        placeholder = pygame.Surface((40, 40), pygame.SRCALPHA)
+        placeholder.fill((150, 150, 200, 180))
+        pygame.draw.rect(placeholder, (80, 80, 120), placeholder.get_rect(), 2)
+        # For None/empty path, cache under a special key to avoid issues if image_path is reused
+        item_image_cache[image_path or "__placeholder_default__"] = placeholder 
+        return placeholder
 
     # 如果圖片已經在快取中，直接返回
     if image_path in item_image_cache:
         return item_image_cache[image_path]
 
     # 主要圖片路徑
+    # 假設 image_path 只是檔案名，例如 "table.png"
     primary_path = os.path.join("worlds", "picture", image_path)
 
-    # 首先嘗試主要路徑
+    # 檢查主要路徑的檔案是否存在
+    if not os.path.exists(primary_path):
+        print(f"Image not found at {primary_path}. Attempting to generate...")
+        # 從 image_path (檔案名) 推斷物品名稱
+        item_name_for_prompt = os.path.splitext(image_path)[0] # 例如 "table.png" -> "table"
+        
+        # 建立 prompt (依照使用者最新腳本的風格)
+        base_prompt = f"Create a top-down view pixel art image of a {item_name_for_prompt}. "
+        style_prompt = f"pixel like {item_name_for_prompt} looking down"
+        full_prompt = base_prompt + style_prompt
+
+        print(f"Generating image for: '{item_name_for_prompt}' (from filename: {image_path})")
+        print(f"Using prompt: '{full_prompt}'")
+        generate_image(full_prompt, primary_path) # 呼叫 generate_image
+
+    # (無論是否生成) 再次嘗試載入主要路徑
     try:
         if os.path.exists(primary_path):
             image = pygame.image.load(primary_path).convert_alpha()
             item_image_cache[image_path] = image
             return image
     except Exception as e:
-        print(f"載入圖片失敗 {primary_path}: {e}")
+        print(f"載入圖片失敗 {primary_path} (even after attempting generation): {e}")
 
-    # 如果主要路徑失敗，嘗試備用位置
+    # 如果主要路徑失敗 (即使在嘗試生成後)，嘗試備用位置
+    # 這部分備用路徑的邏輯可能需要重新評估，因為主要目的是生成到 standard path
+    # 但為了保持原有的 robustness，暫時保留
     backup_paths = [
-        image_path,
+        image_path, # 例如，如果 image_path 本身就是完整路徑
         os.path.join("images", image_path),
         os.path.join("worlds", "images", image_path)
     ]
 
-    for path in backup_paths:
+    for path_idx, path in enumerate(backup_paths):
         try:
             if os.path.exists(path):
+                # print(f"Loading from backup path {path_idx+1}: {path}") # Debugging line
                 image = pygame.image.load(path).convert_alpha()
                 item_image_cache[image_path] = image
-                # 複製到標準位置以便未來使用
-                try:
-                    import shutil
-                    os.makedirs(os.path.dirname(primary_path), exist_ok=True)
-                    shutil.copy(path, primary_path)
-                    print(f"圖片已複製到標準位置: {primary_path}")
-                except:
-                    pass
+                # 考慮是否要將備用路徑找到的圖片複製到主要路徑
+                # try:
+                #     import shutil
+                #     os.makedirs(os.path.dirname(primary_path), exist_ok=True)
+                #     shutil.copy(path, primary_path)
+                #     print(f"圖片已從備用位置複製到標準位置: {primary_path}")
+                # except Exception as copy_e:
+                #     print(f"複製備用圖片到主要位置失敗: {copy_e}")
                 return image
-        except Exception:
+        except Exception as e_backup:
+            # print(f"Failed to load from backup {path}: {e_backup}") # Debugging line
             continue
 
+    # print(f"All loading attempts failed for {image_path}, using placeholder.") # Debugging line
     # 找不到圖片時使用占位圖
     placeholder = pygame.Surface((40, 40), pygame.SRCALPHA)
     placeholder.fill((150, 150, 200, 180))
