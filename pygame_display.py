@@ -192,16 +192,20 @@ def run_pygame_demo(world):
     clock = pygame.time.Clock()
     running = True
 
+    # 新增攝影機相關變數
+    camera_offset_x = 0
+    camera_offset_y = 0
+    panning_speed = 15  # 視角移動速度
+    edge_margin = 50    # 螢幕邊緣觸發區域
+
+    # 新增縮放相關變數
+    current_zoom_level = 1.0
+    zoom_speed = 0.1
+    min_zoom = 0.2
+    max_zoom = 5.0
+
     # 功能說明
-    info_lines = [
-        "【功能說明】",
-        "1. 啟動時可用滑鼠選擇地圖（json）",
-        "2. 地圖、空間、物品、NPC 會自動根據 json 內容繪製",
-        "3. 支援視窗拖拉、最大化，畫面自動縮放",
-        "4. 關閉視窗即結束程式",
-        "",
-        "（如需互動、點擊、移動等功能可再擴充）"
-    ]
+    info_lines = []
 
     # 互動選單對應的按鈕（與 demo.py 主程式一致）
     button_labels = [
@@ -243,52 +247,51 @@ def run_pygame_demo(world):
 
     def ai_process():
         nonlocal last_ai_result, ai_thinking, ai_running, npc_threads
+        
+        # 如果已經在執行，則不啟動新的 (額外的保護)
+        if ai_running:
+            print("AI process already running, skipping new request.")
+            return
+
         ai_running = True
         ai_thinking = True
         
-        # 清空現有執行緒列表
-        for t in npc_threads:
-            if t.is_alive():
-                print(f"等待執行緒結束...")
-                t.join(0.5)  # 等待最多0.5秒
+        # 清理舊的執行緒引用 (主要為了列表乾淨)
         npc_threads.clear()
         
-        # 在主控 NPC 處理前先處理其他 NPC
-        for i, npc in enumerate(npcs):
-                # 標記當前 NPC 處於思考狀態
-                npc.is_thinking = True
-                npc.thinking_status = f"{npc.name} 處理中..."  # 修改 NPC 狀態
+        active_threads_this_batch = [] # 儲存當前批次啟動的執行緒
+        print("Starting AI processing for NPCs...")
+        for i, npc_obj in enumerate(npcs): # 使用 npc_obj 避免與外層 npc 變數混淆
+                npc_obj.is_thinking = True
+                npc_obj.thinking_status = f"{npc_obj.name} 處理中..."
                 
-                # 定義處理單個 NPC 的函數
-                def process_single_npc(npc_id, npc_ref):
+                def process_single_npc(npc_id, single_npc_ref):
                     try:
-                        this_npc_name = npc_ref.name  # 保存當前 NPC 名稱
+                        this_npc_name = single_npc_ref.name
                         print(f"執行緒 {npc_id}: 開始處理 {this_npc_name}...")
-                        
-                        # 處理當前 NPC
-                        result = npc_ref.process_tick()
-                        
-                        # 更新 NPC 狀態
-                        npc_ref.is_thinking = False
-                        npc_ref.thinking_status = f"{this_npc_name}: {result[:50]}" + ("..." if len(result) > 50 else "")
-                        
+                        result = single_npc_ref.process_tick()
+                        single_npc_ref.thinking_status = f"{this_npc_name}: {result[:50]}" + ("..." if len(result) > 50 else "")
                         print(f"執行緒 {npc_id}: 完成處理 {this_npc_name}: {result[:30]}...")
-                    except Exception as e:
-                        print(f"執行緒 {npc_id}: 處理 {npc_ref.name} 失敗: {str(e)}")
-                        npc_ref.is_thinking = False
-                        npc_ref.thinking_status = f"{npc_ref.name}: 處理失敗"
+                    except Exception as e_single:
+                        print(f"執行緒 {npc_id}: 處理 {single_npc_ref.name} 失敗: {str(e_single)}")
+                        single_npc_ref.thinking_status = f"{single_npc_ref.name}: 處理失敗"
+                    finally:
+                        single_npc_ref.is_thinking = False # 確保 thinking 狀態被重置
                 
-                # 創建並啟動執行緒，確保每個執行緒有自己的 NPC 參考
-                t = threading.Thread(target=process_single_npc, args=(i, npc))
-                t.daemon = True  # 設定為守護執行緒
-                npc_threads.append(t)
+                t = threading.Thread(target=process_single_npc, args=(i, npc_obj))
+                t.daemon = True
+                active_threads_this_batch.append(t)
                 t.start()
-                print(f"已啟動執行緒 {i} 用於處理 {npc.name}")
-        # 等待所有執行緒完成
-        time.sleep(0.1)  
+                print(f"已啟動執行緒 {i} 用於處理 {npc_obj.name}")
+        
+        # 等待當前批次的所有NPC思考執行緒完成
+        print("Waiting for all NPC thinking processes to complete...")
+        for t_join in active_threads_this_batch:
+            t_join.join() # 等待每個執行緒執行完畢
+        print("All NPC thinking processes (process_tick) completed.")
         
         ai_thinking = False
-        ai_running = False
+        ai_running = False # AI 思考和 tick 處理階段結束
         
     def save_menu(screen, font, world, original_path):
         menu_items = ["直接存檔", "另存新檔", "取消"]
@@ -944,15 +947,29 @@ def run_pygame_demo(world):
     while running:
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()[0]  # 只考慮左鍵
-        hovered_button = None
-        pressed_button = None
+        
+        # 決定是否禁用「繼續」按鈕和相關觸發
+        # 檢查是否有任何 NPC 正在移動
+        any_npc_moving = False
+        for npc_check in npcs: # 使用不同的變數名稱以避免混淆
+            if hasattr(npc_check, 'move_target') and npc_check.move_target is not None:
+                any_npc_moving = True
+                break # 只要有一個正在移動就足夠了
+        
+        disable_continue_trigger = ai_running or any_npc_moving # 使用 any_npc_moving 來判斷整體移動狀態
+        can_trigger_ai = not disable_continue_trigger
+
+        # 這兩個變數在您的原始程式碼中似乎沒有被後續使用，如果確實不需要，可以考慮移除以簡化
+        hovered_button = None 
+        pressed_button = None 
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.VIDEORESIZE:
                 screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_c and active_npc and not ai_running:
+                if event.key == pygame.K_c and active_npc and can_trigger_ai: # 使用 can_trigger_ai
                     ai_threading = threading.Thread(target=ai_process)
                     ai_threading.start()
                 elif event.key == pygame.K_e:
@@ -978,80 +995,159 @@ def run_pygame_demo(world):
                 total_w = len(button_labels) * (button_w + gap) - gap
                 start_x = (win_w - total_w) // 2
                 y = win_h - button_h - 24
-                for i, (key, label) in enumerate(button_labels):
+                for i, (key_char, label) in enumerate(button_labels):
                     rect = pygame.Rect(start_x + i * (button_w + gap), y, button_w, button_h)  # 判斷滑鼠是否在此按鈕上
                     is_hover = rect.collidepoint(mouse_pos)
-                    is_pressed = is_hover and mouse_pressed
-                    if is_pressed:
-                        btn_color = (255, 200, 60)  # 點擊顏色
-                        border_color = (180, 120, 0)
-                    elif is_hover:
-                        btn_color = (255, 240, 120)  # hover 顏色
-                        border_color = (200, 160, 0)
-                    else:
-                        btn_color = (180, 180, 0)  # 預設顏色
-                        border_color = (80, 80, 0)
-                    pygame.draw.rect(screen, btn_color, rect, border_radius=12)
-                    pygame.draw.rect(screen, border_color, rect, 3, border_radius=12)
-                    btn_text = button_font.render(f"[{key.upper()}] {label}", True, (0,0,0))
-                    btn_text_rect = btn_text.get_rect(center=rect.center)
-                    screen.blit(btn_text, btn_text_rect)
-                    if rect.collidepoint(event.pos) and key == "c" and active_npc and not ai_running:
-                        ai_threading = threading.Thread(target=ai_process)
-                        ai_threading.start()
-                    if rect.collidepoint(event.pos) and key == "e":
-                        running = False
-                    if rect.collidepoint(event.pos) and key == "p":
-                        history_menu(screen, font, active_npc)
-                    if rect.collidepoint(event.pos) and key == "s":
-                        save_menu(screen, font, world, world.get('_file_path', None) or "worlds/maps/unnamed_save.json")
-                    # 新增：處理「切換NPC」按鈕
-                    if rect.collidepoint(event.pos) and key == "n" and len(npcs) > 1:
-                        new_active_npc = npc_selection_menu(screen, font, npcs, active_npc)
-                        if new_active_npc and new_active_npc != active_npc:
-                            active_npc = new_active_npc
-                            last_ai_result = ""  # 清空上一個NPC的AI結果
-                            # 輸出目前關注的NPC
-                            print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+                    
+                    # MOUSEBUTTONDOWN 事件中的按鈕外觀設定 (主要用於即時反饋)
+                    # 按鈕的持續外觀由主繪圖迴圈的底部邏輯處理
+                    current_btn_color_event = (180, 180, 0) # 預設顏色
+                    current_border_color_event = (80, 80, 0) # 預設邊框顏色
+                    text_color_event = (0,0,0) # 預設文字顏色
+
+                    if key_char == "c" and disable_continue_trigger:
+                        current_btn_color_event = (150, 150, 150) # 禁用時的按鈕顏色
+                        current_border_color_event = (100, 100, 100) # 禁用時的邊框顏色
+                    elif is_hover and mouse_pressed: # 滑鼠在按鈕上且按鍵被按下
+                        # 只有非禁用的按鈕才能顯示按下效果
+                        if not (key_char == "c" and disable_continue_trigger):
+                            current_btn_color_event = (255, 200, 60) # 按下時的顏色
+                            current_border_color_event = (180, 120, 0) # 按下時的邊框顏色
+                    elif is_hover: # 滑鼠僅在按鈕上懸停
+                        # 只有非禁用的按鈕才能顯示懸停效果
+                        if not (key_char == "c" and disable_continue_trigger):
+                            current_btn_color_event = (255, 240, 120) # 懸停時的顏色
+                            current_border_color_event = (200, 160, 0) # 懸停時的邊框顏色
+                    
+                    pygame.draw.rect(screen, current_btn_color_event, rect, border_radius=12)
+                    pygame.draw.rect(screen, current_border_color_event, rect, 3, border_radius=12)
+                    btn_text_surface_event = button_font.render(f"[{key_char.upper()}] {label}", True, text_color_event)
+                    btn_text_rect_event = btn_text_surface_event.get_rect(center=rect.center)
+                    screen.blit(btn_text_surface_event, btn_text_rect_event)
+
+                    # 動作觸發
+                    if rect.collidepoint(event.pos): # 使用 event.pos 判斷點擊位置
+                        if key_char == "c" and active_npc and can_trigger_ai: # 使用 can_trigger_ai
+                            ai_threading = threading.Thread(target=ai_process)
+                            ai_threading.start()
+                        if key_char == "e":
+                            running = False
+                        if key_char == "p":
+                            history_menu(screen, font, active_npc)
+                        if key_char == "s":
+                            save_menu(screen, font, world, world.get('_file_path', None) or "worlds/maps/unnamed_save.json")
+                        # 新增：處理「切換NPC」按鈕
+                        if key_char == "n" and len(npcs) > 1:
+                            new_active_npc = npc_selection_menu(screen, font, npcs, active_npc)
+                            if new_active_npc and new_active_npc != active_npc:
+                                active_npc = new_active_npc
+                                last_ai_result = ""  # 清空上一個NPC的AI結果
+                                # 輸出目前關注的NPC
+                                print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+            elif event.type == pygame.MOUSEWHEEL: # 處理滑鼠滾輪事件
+                if event.y > 0: # 向上滾動，放大
+                    current_zoom_level += zoom_speed
+                elif event.y < 0: # 向下滾動，縮小
+                    current_zoom_level -= zoom_speed
+                current_zoom_level = max(min_zoom, min(current_zoom_level, max_zoom)) # 限制縮放範圍
 
         # 每次主循環都同步 display_pos 與 position，並推進動畫移動
         for npc in npcs:
-            # 如果 npc.position 尚未指定，給預設值 [0, 0]
+            # 確保 npc.position 是浮點數列表以進行精確移動
             if npc.position is None:
-                npc.position = [0, 0]
-            if npc.display_pos is None:
-                npc.display_pos = [int(n) for n in npc.position]
+                npc.position = [0.0, 0.0] 
             else:
-                npc.display_pos = [int(n) for n in npc.position]
-            if hasattr(npc, 'move_target') and npc.move_target:
-                dx = npc.move_target[0] - npc.position[0]
-                dy = npc.move_target[1] - npc.position[1]
-                dist = math.hypot(dx, dy)
-                if dist < npc.move_speed:
-                    npc.position = list(npc.move_target)
-                    npc.move_target = None
+                npc.position = [float(p) for p in npc.position]
 
+            if hasattr(npc, 'move_target') and npc.move_target:
+                target_pos = [float(tp) for tp in npc.move_target] # 確保目標位置也是浮點數
+
+                dx = target_pos[0] - npc.position[0]
+                dy = target_pos[1] - npc.position[1]
+                dist = math.hypot(dx, dy)
+                
+                # 獲取移動速度，如果未定義則使用預設值 1.0
+                current_move_speed = getattr(npc, 'move_speed', 1.0) 
+                if current_move_speed <= 0: # 避免速度為0或負數導致的問題
+                    current_move_speed = 1.0 
+
+                if dist < current_move_speed:
+                    npc.position = target_pos # 到達目標
+                    npc.move_target = None
                     # 如果NPC正在等待互動，結束互動並顯示結果
-                    if hasattr(npc, 'waiting_interaction') and npc.waiting_interaction and npc.waiting_interaction.get('started', False):
-                        interaction_result = npc.complete_interaction()
+                    if hasattr(npc, 'waiting_interaction') and \
+                       npc.waiting_interaction and \
+                       npc.waiting_interaction.get('started', False):
+                        interaction_result = npc.complete_interaction() # 假設 NPC 物件有此方法
                         if interaction_result:
-                            last_ai_result = interaction_result
+                            last_ai_result = interaction_result 
                 else:
-                    move_x = npc.move_speed * dx / dist
-                    move_y = npc.move_speed * dy / dist
+                    # 朝目標移動
+                    move_x = current_move_speed * dx / dist
+                    move_y = current_move_speed * dy / dist
                     npc.position[0] += move_x
                     npc.position[1] += move_y
+            
+            # 更新 display_pos 以反映最新的 npc.position (用於繪圖)
+            # display_pos 應為整數座標
+            if npc.position is not None:
+                 npc.display_pos = [int(p) for p in npc.position]
+            elif npc.display_pos is None: # 以防萬一 position 和 display_pos 初始都為 None
+                 npc.display_pos = [0,0]
+
+        # 滑鼠控制視角移動邏輯
+        pan_mouse_x, pan_mouse_y = pygame.mouse.get_pos()
+        win_w_for_pan, win_h_for_pan = screen.get_size()
+
+        if pan_mouse_x < edge_margin:
+            camera_offset_x += panning_speed
+        elif pan_mouse_x > win_w_for_pan - edge_margin:
+            camera_offset_x -= panning_speed
+
+        if pan_mouse_y < edge_margin:
+            camera_offset_y += panning_speed
+        elif pan_mouse_y > win_h_for_pan - edge_margin:
+            camera_offset_y -= panning_speed
 
         # 根據視窗大小計算縮放比例
         win_w, win_h = screen.get_size()
         # 防止 map_w 或 map_h 為 0
         safe_map_w = map_w if map_w != 0 else 1
         safe_map_h = map_h if map_h != 0 else 1
-        scale_x = win_w / safe_map_w
-        scale_y = win_h / safe_map_h
+
+        # 根據縮放級別調整有效地圖尺寸
+        effective_map_w = safe_map_w / current_zoom_level
+        effective_map_h = safe_map_h / current_zoom_level
+
+        scale_x = win_w / effective_map_w
+        scale_y = win_h / effective_map_h
         scale = min(scale_x, scale_y)
-        offset_x = (win_w - safe_map_w * scale) // 2
-        offset_y = (win_h - safe_map_h * scale) // 2
+        
+        # 計算基礎位移 (用於置中等，使用包含縮放的 scale)
+        base_offset_x = (win_w - safe_map_w * scale) // 2
+        base_offset_y = (win_h - safe_map_h * scale) // 2
+
+        # 攝影機邊界限制 (Clamping)
+        scaled_map_width = safe_map_w * scale # 實際渲染的地圖寬度
+        scaled_map_height = safe_map_h * scale # 實際渲染的地圖高度
+
+        if scaled_map_width > win_w:
+            min_cam_x = win_w - scaled_map_width - base_offset_x
+            max_cam_x = -base_offset_x
+            camera_offset_x = max(min_cam_x, min(camera_offset_x, max_cam_x))
+        else:
+            camera_offset_x = 0 # 地圖比視窗窄或一樣寬，則不進行水平平移，保持居中
+
+        if scaled_map_height > win_h:
+            min_cam_y = win_h - scaled_map_height - base_offset_y
+            max_cam_y = -base_offset_y
+            camera_offset_y = max(min_cam_y, min(camera_offset_y, max_cam_y))
+        else:
+            camera_offset_y = 0 # 地圖比視窗矮或一樣高，則不進行垂直平移，保持居中
+
+        # 計算最終繪圖位移 (加入攝影機位移)
+        final_draw_offset_x = base_offset_x + camera_offset_x
+        final_draw_offset_y = base_offset_y + camera_offset_y
 
         screen.fill((240,240,240))
         # 顯示說明
@@ -1063,7 +1159,7 @@ def run_pygame_demo(world):
             px, py = space.display_pos
             sx, sy = space.display_size
             rect = pygame.Rect(
-                int(px*scale+offset_x), int(py*scale+offset_y),
+                int(px*scale + final_draw_offset_x), int(py*scale + final_draw_offset_y),
                 int(sx*scale), int(sy*scale)
             )
             pygame.draw.rect(screen, (200,200,220), rect, border_radius=18)
@@ -1086,12 +1182,12 @@ def run_pygame_demo(world):
                         break
                 if not found:   # 如果沒有找到物品
                     continue    # 跳過
-            draw_item(screen, item, ipos, scale, offset_x, offset_y, font)
+            draw_item(screen, item, ipos, scale, final_draw_offset_x, final_draw_offset_y, font)
         # 畫 NPC
         for npc in npcs:
             px, py = npc.display_pos
-            draw_x = int(px * scale + offset_x)
-            draw_y = int(py * scale + offset_y)
+            draw_x = int(px * scale + final_draw_offset_x)
+            draw_y = int(py * scale + final_draw_offset_y)
             pygame.draw.circle(screen, npc.display_color, (draw_x, draw_y), int(npc.radius * scale))
             npc_text = font.render(npc.name, True, (0,0,0))
             screen.blit(npc_text, (draw_x-16, draw_y-int(npc.radius*scale)-10))
@@ -1101,7 +1197,6 @@ def run_pygame_demo(world):
             
             # 直接使用NPC的thinking_status（即self_talk_reasoning）
             display_text = ""
-            
             # 處理NPC的思考狀態
             if npc.is_thinking:
                 display_text = f"{npc.name} 思考中..."
@@ -1122,7 +1217,6 @@ def run_pygame_demo(world):
                 display_text = display_text[:57] + "..."
                 
             bubble_text = bubble_font.render(display_text, True, (0,0,0))
-                
             text_width = bubble_text.get_width()
             text_height = bubble_text.get_height()
             bubble_width = max(200, text_width + 20)
@@ -1157,24 +1251,45 @@ def run_pygame_demo(world):
         total_w = len(button_labels) * (button_w + gap) - gap
         start_x = (win_w - total_w) // 2
         y = win_h - button_h - 24
-        for i, (key, label) in enumerate(button_labels):
-            rect = pygame.Rect(start_x + i * (button_w + gap), y, button_w, button_h)  # 判斷滑鼠是否在此按鈕上
+        for i, (key_char, label) in enumerate(button_labels):
+            rect = pygame.Rect(start_x + i * (button_w + gap), y, button_w, button_h)
             is_hover = rect.collidepoint(mouse_pos)
-            is_pressed = is_hover and mouse_pressed
-            if is_pressed:
-                btn_color = (255, 200, 60)  # 點擊顏色
-                border_color = (180, 120, 0)
-            elif is_hover:
-                btn_color = (255, 240, 120)  # hover 顏色
-                border_color = (200, 160, 0)
-            else:
-                btn_color = (180, 180, 0)  # 預設顏色
-                border_color = (80, 80, 0)
-            pygame.draw.rect(screen, btn_color, rect, border_radius=12)
-            pygame.draw.rect(screen, border_color, rect, 3, border_radius=12)
-            btn_text = button_font.render(f"[{key.upper()}] {label}", True, (0,0,0))
-            btn_text_rect = btn_text.get_rect(center=rect.center)
-            screen.blit(btn_text, btn_text_rect)
+            
+            is_this_button_pressed = False
+            # 判斷按鈕是否真的被按下 (考慮滑鼠狀態和按鈕是否可被觸發)
+            if mouse_pressed and is_hover:
+                if key_char == "c": # 對於'繼續'按鈕
+                    if can_trigger_ai: # 只有在可以觸發AI時才算按下
+                        is_this_button_pressed = True
+                else: # 其他按鈕總是可被按下
+                    is_this_button_pressed = True
+            
+            current_btn_color = (180, 180, 0)  # 預設按鈕顏色
+            current_border_color = (80, 80, 0) # 預設邊框顏色
+            current_text_color = (0,0,0)      # 預設文字顏色
+
+            if key_char == "c" and disable_continue_trigger: # "繼續"按鈕在 AI 執行或 NPC 移動時的禁用狀態
+                current_btn_color = (150, 150, 150)    # 灰色表示禁用
+                current_border_color = (100, 100, 100) # 禁用時的邊框顏色
+                current_text_color = (80,80,80)     # 文字也變灰
+            elif is_this_button_pressed: # 按鈕被按下時的狀態
+                current_btn_color = (255, 200, 60)  # 按下時的顏色
+                current_border_color = (180, 120, 0) # 按下時的邊框顏色
+            elif is_hover: # 滑鼠懸停在按鈕上時的狀態
+                # "繼續"按鈕的懸停效果只在 AI 未執行且沒有 NPC 移動時顯示
+                if key_char == "c" and can_trigger_ai:
+                    current_btn_color = (255, 240, 120)  # 懸停時的顏色
+                    current_border_color = (200, 160, 0) # 懸停時的邊框顏色
+                elif key_char != "c": # 其他按鈕總是顯示懸停效果
+                    current_btn_color = (255, 240, 120)
+                    current_border_color = (200, 160, 0)
+                # 如果是 'c' 且 disable_continue_trigger 且 is_hover，則由上面的禁用狀態處理，這裡不用 else
+            
+            pygame.draw.rect(screen, current_btn_color, rect, border_radius=12)
+            pygame.draw.rect(screen, current_border_color, rect, 3, border_radius=12)
+            btn_text_surface = button_font.render(f"[{key_char.upper()}] {label}", True, current_text_color)
+            btn_text_rect = btn_text_surface.get_rect(center=rect.center)
+            screen.blit(btn_text_surface, btn_text_rect)
         pygame.display.flip()
         clock.tick(30)
     pygame.quit()
