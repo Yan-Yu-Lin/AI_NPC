@@ -223,32 +223,52 @@ class NPC(BaseModel):
             target_npc: Literal[*valid_npcs] if valid_npcs else str = Field(description="對話對象的名稱")
             dialogue: str = Field(description="想要說的話")
 
-        # 定義物品互動操作（原有單一物品互動）
+        # 定義物品互動操作（統一單一物品和多物品互動）
         class InteractItemAction(BaseModel):
             action_type: Literal["interact_item"]
-            interact_with: Literal[*available_items] if available_items else str = Field(description="要互動的物品名稱")
-            how_to_interact: str = Field(description="詳細描述如何與物品互動。請使用描述性語言，清楚說明你想要如何使用或操作這個物品。")
-
-        # 定義多物品互動操作（新增：與空間中的目標物品和庫存中的多個物品互動）
-        class InteractWithTargetItemAndInventoryItems(BaseModel):
-            action_type: Literal["interact_with_target_and_inventory"]
-            target_item: Literal[*available_items] if available_items else str = Field(description="空間中的主要目標物品名稱，NPC 將移動到此物品位置進行互動")
-            inventory_item_1: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第一個輔助物品名稱（可選）")
-            inventory_item_2: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第二個輔助物品名稱（可選）")
-            inventory_item_3: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第三個輔助物品名稱（可選）")
-            inventory_item_4: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第四個輔助物品名稱（可選）")
-            inventory_item_5: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第五個輔助物品名稱（可選）")
-            how_to_interact: str = Field(description="詳細描述如何與這些物品互動。請使用描述性語言，清楚說明你想要如何使用或操作這些物品，例如烹飪、組裝或合成")
+            #TODO: target_item should be available_items in space + inventory_items
+            target_item: Literal[*available_items] if available_items else str = Field(description="主要目標物品名稱，NPC 將移動到此物品位置進行互動，可以是空間中或庫存中的物品。例如：與「鍋子」互動進行烹飪，或與「樹」互動進行砍伐。")
+            inventory_item_1: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第一個輔助物品名稱（可選）。例如：烹飪時使用「雞肉」作為食材，或組裝時使用「螺絲」。")
+            inventory_item_2: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第二個輔助物品名稱（可選）。例如：烹飪時使用「蔬菜」作為食材，或組裝時使用「螺絲起子」。")
+            inventory_item_3: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第三個輔助物品名稱（可選）。例如：烹飪時使用「調味料」作為食材。")
+            inventory_item_4: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第四個輔助物品名稱（可選）。例如：烹飪時使用「油」作為食材。")
+            inventory_item_5: Optional[Literal[*inventory_items] if inventory_items else str] = Field(None, description="庫存中的第五個輔助物品名稱（可選）。例如：烹飪時使用「鹽」作為食材。")
+            how_to_interact: str = Field(description="""
+            詳細描述如何與這些物品互動。請使用描述性語言，清楚說明你想要如何使用或操作這些物品。以下是一些可能的互動方式和場景：
+            
+            1. 拆解物品：你可以將物品拆解成零件或材料，系統會刪除原物品並創建新物品。例如：「我要用工具拆解這台舊電腦，取出電路板和硬盤。」（target_item: 舊電腦，inventory_item_1: 螺絲起子）
+            2. 烹飪：你可以使用鍋子或烤箱（作為 target_item）與庫存中的多個食材進行烹飪，系統會刪除食材並創建新的料理。例如：「我要用鍋子烹飪雞肉和蔬菜，製作一盤炒雞肉。」（target_item: 鍋子，inventory_item_1: 雞肉，inventory_item_2: 蔬菜）
+            3. 從儲存空間取出物品：你可以與冰箱、櫃子或工作台（作為 target_item）互動，從中取出物品，系統會創建新物品。例如：「我要從冰箱中拿出一瓶飲料和一些食材。」（target_item: 冰箱）
+            4. 砍伐或採集：你可以與樹木、岩石或其他資源（作為 target_item）互動，進行砍伐或採集，系統會刪除原物品並創建新材料。例如：「我要用斧頭砍倒這棵樹，獲取木材和樹枝。」（target_item: 樹，inventory_item_1: 斧頭）
+            5. 組裝或合成：你可以使用工具或工作台（作為 target_item）與庫存中的零件或材料進行組裝，系統會刪除材料並創建新物品。例如：「我要在工作台上用螺絲和木板組裝一個木架。」（target_item: 工作台，inventory_item_1: 螺絲，inventory_item_2: 木板）
+            6. 使用物品：你可以簡單地使用物品而不改變其狀態，系統可能只更新物品描述。例如：「我要用電腦上網查資料。」（target_item: 電腦）
+            
+            請根據你的意圖和物品的性質，詳細描述你的行為，系統將根據你的描述執行相應的操作。
+            """)
 
         # 頂層響應
         class GeneralResponse(BaseModel):
             self_talk_reasoning: str = Field(description="你對當前情況的思考和分析")
             action: Optional[Union[
                 EnterSpaceAction,
-                InteractItemAction,
                 TalkToNPCAction,
-                InteractWithTargetItemAndInventoryItems
-            ]] = Field(None, description="你想要執行的動作")
+                InteractItemAction
+            ]] = Field(None, description="""
+            你想要執行的動作。請根據你的意圖選擇適當的行動類別：
+            
+            1. EnterSpaceAction：用於移動到另一個空間，例如：「我要去廚房。」此行動適用於需要在不同空間之間移動的情況，系統會將你移動到目標空間並更新你的位置。
+            
+            2. TalkToNPCAction：用於與其他 NPC 進行對話，例如：「我要和 John 談談今天的計劃。」此行動適用於社交互動，系統會記錄你的對話內容並可能觸發其他 NPC 的回應。
+            
+            3. InteractItemAction：用於與物品進行互動，涵蓋了多種可能性，從簡單的使用到複雜的合成。此行動適用於任何涉及物品的操作，包括但不限於：
+            - 拆解物品：將物品分解成零件或材料，例如：「我要拆解這台舊電腦。」系統會刪除原物品並創建新物品（如電路板、硬盤）。
+            - 烹飪：使用鍋子或烤箱與多個食材進行烹飪，例如：「我要用鍋子烹飪雞肉和蔬菜。」系統會刪除食材並創建新料理（如炒雞肉）。
+            - 從儲存空間取出物品：從冰箱、櫃子或工作台中取出物品，例如：「我要從冰箱拿飲料。」系統會創建新物品（如飲料）。
+            - 砍伐或採集：砍伐樹木或採集資源，例如：「我要用斧頭砍樹。」系統會刪除樹並創建新材料（如木材、樹枝）。
+            - 組裝或合成：使用工具或工作台與零件進行組裝，例如：「我要用螺絲和木板組裝木架。」系統會刪除材料並創建新物品（如木架）。
+            - 使用物品：簡單使用物品而不改變其狀態，例如：「我要用電腦上網。」系統可能只更新物品描述或不做改變。
+            請在 how_to_interact 欄位中詳細描述你的意圖，系統將根據你的描述執行相應操作。
+            """)
         
         return GeneralResponse
 
@@ -322,6 +342,7 @@ class NPC(BaseModel):
         # If the target space is not connected, return an error message
         return f"Cannot move to {target_space_name}. It is not connected to {self.current_space.name}."
 
+
     def process_tick(self, user_input: Optional[str] = None):
         """
         Process a single tick of the NPC's behavior.
@@ -353,51 +374,16 @@ class NPC(BaseModel):
         )
         response = completion.choices[0].message.parsed
 
-        # Add AI's self-reasoning and action to history
-        reasoning_content = f"Thinking: {response.self_talk_reasoning}"
-        self.history.append({"role": "assistant", "content": reasoning_content})
-        
-        # Add the attempted action to history if one exists
-        if response.action:
-            if hasattr(response.action, "action_type"):
-                if response.action.action_type == "interact_item":
-                    action_content = f"Action: I'm interacting with {response.action.interact_with} by {response.action.how_to_interact}"
-                elif response.action.action_type == "enter_space":
-                    action_content = f"Action: I'm moving to {response.action.target_space}"
-                elif response.action.action_type == "talk_to_npc":
-                    action_content = f"Action: I'm talking to {response.action.target_npc} saying: {response.action.dialogue}"
-                elif response.action.action_type == "interact_with_target_and_inventory":
-                    # 處理多物品互動的歷史記錄
-                    target_item = response.action.target_item
-                    
-                    # 安全地獲取庫存物品，使用 getattr 避免屬性不存在的問題
-                    inventory_items = []
-                    for i in range(1, 6):
-                        item_attr = f"inventory_item_{i}"
-                        item = getattr(response.action, item_attr, None)
-                        if item:
-                            inventory_items.append(item)
-                    
-                    inventory_items_str = ", ".join(inventory_items) if inventory_items else "none"
-                    action_content = f"Action: I'm interacting with target item {target_item} using inventory items [{inventory_items_str}] by {response.action.how_to_interact}"
-                else:
-                    action_content = "Action: Attempting an unknown action type"
-            else:
-                action_content = "Action: Action has no type specified"
-                
-            self.history.append({"role": "assistant", "content": action_content})
-        
         print("\n=== AI Response ===")
         print(response)
         print("==================\n")
 
         # Handle the action
         if not response.action:
-            self.history.append({
-                "role": "system",
-                "content": "No action taken"
-            })
-            return response.self_talk_reasoning
+            # If no action, append reasoning only
+            memory = f"{response.self_talk_reasoning}\n沒有執行動作"
+            self.history.append({"role": "assistant", "content": memory})
+            return memory
 
         action = response.action
         result = ""
@@ -405,18 +391,7 @@ class NPC(BaseModel):
         # Process the action based on its type
         if hasattr(action, "action_type"):
             if action.action_type == "interact_item":
-                # 使用新的互動系統處理物品互動
-                result = world_system.process_interaction(
-                    self, 
-                    action.interact_with, 
-                    action.how_to_interact
-                )
-            elif action.action_type == "enter_space":
-                result = self.move_to_space(action.target_space)
-            elif action.action_type == "talk_to_npc":
-                result = self.talk_to_npc(action.target_npc, action.dialogue)
-            elif action.action_type == "interact_with_target_and_inventory":
-                # 處理多物品互動
+                # 使用統一的互動系統處理物品互動（支援單一物品和多物品）
                 target_item = action.target_item
                 
                 # 安全地獲取庫存物品，使用 getattr 避免屬性不存在的問題
@@ -427,22 +402,38 @@ class NPC(BaseModel):
                     if item:
                         inventory_items.append(item)
                 
-                result = world_system.process_multi_item_interaction(
+                result = world_system.process_interaction(
                     self,
                     target_item,
                     inventory_items,
                     action.how_to_interact
                 )
+            elif action.action_type == "enter_space":
+                result = self.move_to_space(action.target_space)
+            elif action.action_type == "talk_to_npc":
+                result = self.talk_to_npc(action.target_npc, action.dialogue)
             else:
                 result = f"Unknown action type: {action.action_type}"
         else:
             result = "Action has no type specified."
 
-        self.history.append({"role": "system", "content": result})
+        # Append reasoning, how_to_interact or dialogue (if applicable), and result to history as assistant
+        memory = f"{response.self_talk_reasoning}"
+        if action.action_type == "interact_item":
+            memory += f"\n{action.how_to_interact}"
+        elif action.action_type == "talk_to_npc":
+            memory += f"\n對 {action.target_npc} 說: {action.dialogue}"
+        elif action.action_type == "enter_space":
+            memory += f"\n我要移動到 {action.target_space}"
+        memory += f"\n結果: {result}"
+        self.history.append({"role": "assistant", "content": memory})
+        
         print("\n=== Action Result ===")
         print(result)
         print("===================\n")
-        return response.self_talk_reasoning
+        
+        # Return the complete result including reasoning, how_to_interact or dialogue (if applicable), and result
+        return memory
 
     def talk_to_npc(self, target_npc_name: str, dialogue: str) -> str:
         """
@@ -1007,447 +998,591 @@ class AI_System(BaseModel):
     系統 AI 負責解釋和處理 NPC AI 的互動意圖，
     並根據這些意圖修改世界狀態（創建/刪除物品、修改物品描述等）。
     """
-    time: str = "中午"  # 時間描述
-    weather: str = "晴朗"  # 天氣描述
-    history: List[Dict[str, str]] = []  # 系統歷史記錄
-    world: Dict[str, Any] = {}  # 世界狀態的引用
-    
-    class CreateItemsFunction(BaseModel):
-        function_type: Literal["create_items"]
-        create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。用於從儲存空間（如冰箱、櫃子）取出物品時，或其他需要創建物品的場景。例如：從冰箱拿出飲料，create_item_1 為「飲料」。")
-        create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一瓶冰涼的可樂，剛從冰箱拿出來，表面有冷凝水珠。」")
-        create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_2 為「蔬菜」。")
-        create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「新鮮的蔬菜，包括胡蘿蔔、青椒和洋蔥。」")
-        create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_3 為「調味料」。")
-        create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「各種烹飪用的調味料，包括鹽、胡椒和香草。」")
-        create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
-        create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
-        create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
-        create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
-    
-    class DeleteItemFunction(BaseModel):
-        function_type: Literal["delete_item"]
-        item_name: str = Field(description="要刪除的物品名稱。僅用於刪除單一物品，例如 NPC 丟棄或消耗物品時。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
-    
+    time: str = "中午"
+    weather: str = "晴朗"
+    history: List[Dict[str, str]] = []
+    world: Dict[str, Any] = {} # 實際使用時會被賦值
+
+    # 注意：以下這些類級別的 schema 定義現在主要作為一個「藍本」或「原始描述的來源」。
+    # 實際在 process_interaction 中傳給 LLM 的 schema 將是 update_schema 方法內部重新定義並返回的那個。
+    # 這樣做是為了完全遵循您 NPC.update_schema 的模式。
+
+    class ModifyWorldItemsFunction(BaseModel):
+        function_type: Literal["modify_world_items"] = Field("modify_world_items", description="固定值，表示這是一個通用的物品修改功能。")
+        delete_item_1: Optional[str] = Field(None, description="要刪除的第一個物品的名稱。例如：在烹飪時，這可能是「生雞肉」。如果本次操作不刪除任何物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+        delete_item_2: Optional[str] = Field(None, description="要刪除的第二個物品的名稱。例如：烹飪時decyd的「蔬菜」。如果本次操作不刪除超過一個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+        delete_item_3: Optional[str] = Field(None, description="要刪除的第三個物品的名稱。例如：製作藥水時的「藥草A」。如果本次操作不刪除超過兩個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+        delete_item_4: Optional[str] = Field(None, description="要刪除的第四個物品的名稱。例如：製作複雜裝置時的「零件X」。如果本次操作不刪除超過三個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+        delete_item_5: Optional[str] = Field(None, description="要刪除的第五個物品的名稱。例如：獻祭儀式中消耗的「魔法水晶」。如果本次操作不刪除超過四個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+        create_item_1_name: Optional[str] = Field(None, description="要創建的第一個新物品的名稱。例如：「香煎雞排」。如果本次操作不創建任何物品或不使用此欄位，請保持為 None。")
+        create_item_1_description: Optional[str] = Field(None, description="第一個新物品的詳細描述。必須提供如果 create_item_1_name 被指定。例如：「一塊用香料精心烹製，外皮金黃酥脆、肉質鮮嫩多汁的雞排。」")
+        create_item_2_name: Optional[str] = Field(None, description="要創建的第二個新物品的名稱。例如：「蔬菜沙拉」。")
+        create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「一份由新鮮生菜、番茄、小黃瓜和橄欖組成的清爽沙拉，淋上了特製油醋汁。」")
+        create_item_3_name: Optional[str] = Field(None, description="要創建的第三個新物品的名稱。例如：「治療藥水」。")
+        create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「一瓶散發著淡淡草藥香氣的紅色藥水，據說能迅速治癒傷口。」")
+        create_item_4_name: Optional[str] = Field(None, description="要創建的第四個新物品的名稱。例如：「木柴捆」。")
+        create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。例如：「一捆由砍伐樹木得到的乾燥木柴，適合用作燃料。」")
+        create_item_5_name: Optional[str] = Field(None, description="要創建的第五個新物品的名稱。例如：「精緻的木雕」。")
+        create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。例如：「一個用優質木材精心雕刻而成的小鳥擺飾，栩栩如生。」")
+        # 這裡可以保留 ModifyWorldItemsFunction 的完整描述文字和範例，例如：
+        # "這是一個高度通用的物品操作功能..." (內容同前一個版本)
+        model_config = {"title": "AI_System_ModifyWorldItemsFunction_Static"} # 區分類名
+
     class ChangeItemDescriptionFunction(BaseModel):
-        function_type: Literal["change_item_description"]
-        item_name: str = Field(description="要修改描述的物品名稱。用於物品狀態變化但不需要創建新物品時，例如：物品被使用後狀態改變、物品被修理或損壞。")
+        function_type: Literal["change_item_description"] = Field("change_item_description", description="固定值，表示這是一個修改物品描述的功能。")
+        item_name: str = Field(description="要修改描述的物品名稱。用於物品狀態變化但不需要創建新物品時，例如：物品被使用後狀態改變、物品被修理或損壞。此物品必須是 NPC 正在互動的物品之一。")
         new_description: str = Field(description="物品的新描述，反映其當前狀態。例如：「杯子裡現在裝滿了水」或「手機屏幕有了裂痕」。")
-    
-    class DeleteAndCreateNewItemFunction(BaseModel):
-        function_type: Literal["delete_and_create_new_item"]
-        old_item_name: str = Field(description="要替換的物品名稱。用於物品轉換為另一個物品的場景，例如：烹飪食材變成料理、修理破損物品、或物品狀態顯著改變需要替換。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
-        new_item_name: str = Field(description="新物品的名稱。例如：將「生雞肉」烹飪後變成「烤雞」。")
-        new_description: str = Field(description="新物品的詳細描述。例如：「一盤香噴噴的烤雞，表面金黃酥脆，肉質鮮嫩多汁。」")
-    
+        model_config = {"title": "AI_System_ChangeItemDescriptionFunction_Static"}
+
     class MoveItemToInventoryFunction(BaseModel):
-        function_type: Literal["move_item_to_inventory"]
-        item_name: str = Field(description="要移動的物品名稱。用於 NPC 撿起或收集空間中的物品時，例如：撿起地上的鑰匙、從桌上拿起書本。")
-    
+        function_type: Literal["move_item_to_inventory"] = Field("move_item_to_inventory", description="固定值，表示這是一個將物品從空間移動到 NPC 庫存的功能。")
+        item_name: str = Field(description="要移動到 NPC 庫存的物品名稱。用於 NPC 撿起或收集空間中的物品時，例如：撿起地上的鑰匙、從桌上拿起書本。此物品必須是 NPC 正在互動的目標物品(target_item)且位於空間中。")
+        model_config = {"title": "AI_System_MoveItemToInventoryFunction_Static"}
+
     class MoveItemFromInventoryToSpaceFunction(BaseModel):
-        function_type: Literal["move_item_from_inventory_to_space"]
-        item_name: str = Field(description="要從庫存中取出並放置到空間的物品名稱。用於 NPC 將物品從庫存中拿出並放置在當前空間時，例如：放下背包、擺放物品。")
-    
-    class DeleteMultipleAndCreateMultipleFunction(BaseModel):
-        function_type: Literal["delete_multiple_and_create_multiple"]
-        delete_item_1: str = Field(description="要刪除的第一個物品名稱（必填）。此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。例如：砍樹時，delete_item_1 為「樹」。")
-        delete_item_2: Optional[str] = Field(None, description="要刪除的第二個物品名稱（可選）。例如：烹飪時，delete_item_2 可能是「雞蛋」。")
-        delete_item_3: Optional[str] = Field(None, description="要刪除的第三個物品名稱（可選）。例如：烹飪時，delete_item_3 可能是「麵粉」。")
-        delete_item_4: Optional[str] = Field(None, description="要刪除的第四個物品名稱（可選）。例如：烹飪時，delete_item_4 可能是「糖」。")
-        delete_item_5: Optional[str] = Field(None, description="要刪除的第五個物品名稱（可選）。例如：烹飪時，delete_item_5 可能是「鹽」。")
-        
-        create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。例如：砍樹時，create_item_1 可能是「木材」。")
-        create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一塊粗糙的木材，可用於建造或製作工具。」")
-        create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：砍樹時，create_item_2 可能是「樹枝」。")
-        create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「一些細長的樹枝，可用於生火或簡單工藝。」")
-        create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：砍樹時，create_item_3 可能是「樹葉」。")
-        create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「一堆綠色的樹葉，可用於裝飾或製作草藥。」")
-        create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
-        create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
-        create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
-        create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
-    
+        function_type: Literal["move_item_from_inventory_to_space"] = Field("move_item_from_inventory_to_space", description="固定值，表示這是一個將物品從 NPC 庫存移動到空間的功能。")
+        item_name: str = Field(description="要從 NPC 庫存中取出並放置到空間的物品名稱。用於 NPC 將物品從庫存中拿出並放置在當前空間時，例如：放下背包、擺放物品。此物品必須是 NPC 庫存中的物品之一。")
+        model_config = {"title": "AI_System_MoveItemFromInventoryToSpaceFunction_Static"}
+
     class GeneralResponse(BaseModel):
-        reasoning: str = Field(description="""
-        系統對 NPC 行為的內部分析和思考。請詳細分析 NPC 的互動意圖，考慮物品的性質、位置和可能的變化。
-        例如：
-        - 當 NPC 從冰箱拿飲料時：「NPC 想從冰箱取出飲料，這是一個從儲存空間獲取物品的行為，應該創建一個新的飲料物品。」
-        - 當 NPC 砍樹時：「NPC 正在砍伐樹木，這會導致樹被移除，並產生木材、樹枝等新物品。應該刪除樹並創建多個新物品。」
-        - 當 NPC 烹飪時：「NPC 正在使用鍋子和多種食材烹飪，這會消耗食材並產生新的料理。應該保留鍋子，刪除食材，並創建新的料理物品。」
-        """)
-        
+        reasoning: str = Field(description="...") # 描述同前
         function: Optional[Union[
-            "AI_System.CreateItemsFunction",
-            "AI_System.DeleteItemFunction",
+            "AI_System.ModifyWorldItemsFunction", # 指向類級別的定義以獲取聯合類型提示
             "AI_System.ChangeItemDescriptionFunction",
-            "AI_System.DeleteAndCreateNewItemFunction",
             "AI_System.MoveItemToInventoryFunction",
-            "AI_System.MoveItemFromInventoryToSpaceFunction",
-            "AI_System.DeleteMultipleAndCreateMultipleFunction"
-        ]] = Field(None, description="""
-        根據 NPC 的互動意圖選擇適當的功能。不同場景應使用不同功能：
-        
-        1. 從儲存空間取出物品（如冰箱拿飲料或多種食材）：使用 CreateItemsFunction
-           例：NPC 從冰箱拿出可樂 → CreateItemsFunction(create_item_1="可樂", create_item_1_description="冰涼的可樂", ...)
-           例：NPC 從冰箱拿出多種食材 → CreateItemsFunction(create_item_1="雞肉", create_item_2="蔬菜", ...)
-        
-        2. 撿起空間中的物品：使用 MoveItemToInventoryFunction
-           例：NPC 撿起鑰匙 → MoveItemToInventoryFunction(item_name="鑰匙")
-        
-        3. 放下庫存中的物品：使用 MoveItemFromInventoryToSpaceFunction
-           例：NPC 放下背包 → MoveItemFromInventoryToSpaceFunction(item_name="背包")
-        
-        4. 物品狀態變化但不需替換：使用 ChangeItemDescriptionFunction
-           例：NPC 使用杯子裝水 → ChangeItemDescriptionFunction(item_name="杯子", new_description="裝滿水的杯子")
-        
-        5. 單一物品轉換為另一物品：使用 DeleteAndCreateNewItemFunction
-           例：NPC 修理破損物品 → DeleteAndCreateNewItemFunction(old_item_name="破損手錶", new_item_name="修好的手錶", ...)
-        
-        6. 複雜互動（如砍樹、烹飪、合成）：使用 DeleteMultipleAndCreateMultipleFunction
-           例：NPC 砍樹 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="樹", create_item_1="木材", create_item_2="樹枝", ...)
-           例：NPC 烹飪 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="雞肉", delete_item_2="蔬菜", create_item_1="炒雞肉", ...)
-        
-        7. 消耗或丟棄單一物品：使用 DeleteItemFunction
-           例：NPC 吃掉蘋果 → DeleteItemFunction(item_name="蘋果")
-        """)
-        
-        response_to_AI: str = Field(description="""
-        系統對 NPC 的回應，描述行為結果。請使用生動、具體的語言描述 NPC 互動的結果和世界狀態的變化。
-        例如：
-        - 當 NPC 從冰箱拿飲料時：「你打開冰箱，拿出一瓶冰涼的可樂。冰涼的觸感讓你感到舒爽。」
-        - 當 NPC 砍樹時：「你用力砍倒了這棵樹。樹倒下後，你收集了幾塊優質木材和一些樹枝。」
-        - 當 NPC 烹飪時：「你熟練地將雞肉和蔬菜放入鍋中翻炒，很快一盤香噴噴的炒雞肉就做好了。廚房裡彌漫著誘人的香氣。」
-        - 當 NPC 使用電腦時：「你打開電腦，開始瀏覽網頁。屏幕的藍光照亮了你的臉龐，你感到沉浸在信息的海洋中。」
-        """)
+            "AI_System.MoveItemFromInventoryToSpaceFunction"
+        ]] = Field(None, description="...") # 描述同前
+        response_to_AI: str = Field(description="...") # 描述同前
+        model_config = {"title": "AI_System_GeneralResponse_Static"}
 
 
-    def update_schema(self, available_items: List[str], inventory_items: List[str]):
+    def update_schema(self, available_items_for_interaction: List[str], npc_complete_inventory: List[str]):
         """
-        動態生成 AI_System 的回應模式，根據當前 NPC 正在使用的物品列表限制 Literal 選項。
+        根據 NPC 當前互動涉及的物品和其完整庫存，動態生成 AI_System 使用的 GeneralResponse schema。
+        所有 schema 結構和描述文字在此方法內重新定義，並直接嵌入動態 Literal。
         
         Args:
-            available_items: 當前 NPC 可用的物品列表（包含空間中和庫存中的物品）。
-            inventory_items: 當前 NPC 庫存中的物品列表。
+            available_items_for_interaction: NPC 本次互動明確涉及的所有物品的名稱列表 (target_item + inventory_items from NPC's action)。
+                                             這些是 ModifyWorldItemsFunction 中 delete_item_X,
+                                             ChangeItemDescriptionFunction 中 item_name,
+                                             以及 MoveItemToInventoryFunction 中 item_name 的有效選項。
+            npc_complete_inventory: NPC 完整庫存中所有物品的名稱列表。
+                                    這些是 MoveItemFromInventoryToSpaceFunction 中 item_name 的有效選項。
         
         Returns:
-            GeneralResponse: 動態生成的回應模式類別。
+            type[GeneralResponse]: 一個在方法內部定義的 GeneralResponse Pydantic 模型類別，
+                                   其內嵌的 Function classes 的特定欄位已包含動態 Literal。
         """
-        from typing import Literal, Optional, Union
-        from pydantic import BaseModel, Field
+        
+        # 準備動態 Literal 類型
+        # 如果列表為空，Literal[tuple()] 會導致 Pydantic 錯誤或非預期行為。
+        # 使用 str 作為備案，並在 prompt 中指導 LLM 此時無有效選項。
+        # 或者，如果確定某個 Literal 列表不應為空，則應在更早的邏輯中處理。
+        DeleteOrModifyTargetLiteral = Literal[tuple(available_items_for_interaction)] if available_items_for_interaction else str
+        MoveFromInventoryLiteral = Literal[tuple(npc_complete_inventory)] if npc_complete_inventory else str
 
-        class CreateItemsFunction(BaseModel):
-            function_type: Literal["create_items"]
-            create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。用於從儲存空間（如冰箱、櫃子）取出物品時，或其他需要創建物品的場景。例如：從冰箱拿出飲料，create_item_1 為「飲料」。")
-            create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一瓶冰涼的可樂，剛從冰箱拿出來，表面有冷凝水珠。」")
-            create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_2 為「蔬菜」。")
-            create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「新鮮的蔬菜，包括胡蘿蔔、青椒和洋蔥。」")
-            create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：從冰箱拿出多種食材，create_item_3 為「調味料」。")
-            create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「各種烹飪用的調味料，包括鹽、胡椒和香草。」")
-            create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
-            create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
-            create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
-            create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
-        
-        class DeleteItemFunction(BaseModel):
-            function_type: Literal["delete_item"]
-            item_name: Literal[*available_items] if available_items else str = Field(description="要刪除的物品名稱。僅用於刪除單一物品，例如 NPC 丟棄或消耗物品時。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
-        
-        class ChangeItemDescriptionFunction(BaseModel):
-            function_type: Literal["change_item_description"]
-            item_name: Literal[*available_items] if available_items else str = Field(description="要修改描述的物品名稱。用於物品狀態變化但不需要創建新物品時，例如：物品被使用後狀態改變、物品被修理或損壞。")
-            new_description: str = Field(description="物品的新描述，反映其當前狀態。例如：「杯子裡現在裝滿了水」或「手機屏幕有了裂痕」。")
-        
-        class DeleteAndCreateNewItemFunction(BaseModel):
-            function_type: Literal["delete_and_create_new_item"]
-            old_item_name: Literal[*available_items] if available_items else str = Field(description="要替換的物品名稱。用於物品轉換為另一個物品的場景，例如：烹飪食材變成料理、修理破損物品、或物品狀態顯著改變需要替換。注意：此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。")
-            new_item_name: str = Field(description="新物品的名稱。例如：將「生雞肉」烹飪後變成「烤雞」。")
-            new_description: str = Field(description="新物品的詳細描述。例如：「一盤香噴噴的烤雞，表面金黃酥脆，肉質鮮嫩多汁。」")
-        
-        class MoveItemToInventoryFunction(BaseModel):
-            function_type: Literal["move_item_to_inventory"]
-            item_name: Literal[*available_items] if available_items else str = Field(description="要移動的物品名稱。用於 NPC 撿起或收集空間中的物品時，例如：撿起地上的鑰匙、從桌上拿起書本。")
-        
-        class MoveItemFromInventoryToSpaceFunction(BaseModel):
-            function_type: Literal["move_item_from_inventory_to_space"]
-            item_name: Literal[*inventory_items] if inventory_items else str = Field(description="要從庫存中取出並放置到空間的物品名稱。用於 NPC 將物品從庫存中拿出並放置在當前空間時，例如：放下背包、擺放物品。")
-        
-        class DeleteMultipleAndCreateMultipleFunction(BaseModel):
-            function_type: Literal["delete_multiple_and_create_multiple"]
-            delete_item_1: Literal[*available_items] if available_items else str = Field(description="要刪除的第一個物品名稱（必填）。此物品必須是 NPC 正在互動的物品（target_item 或 inventory_items 中的一個）。例如：砍樹時，delete_item_1 為「樹」。")
-            delete_item_2: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第二個物品名稱（可選）。例如：烹飪時，delete_item_2 可能是「雞蛋」。")
-            delete_item_3: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第三個物品名稱（可選）。例如：烹飪時，delete_item_3 可能是「麵粉」。")
-            delete_item_4: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第四個物品名稱（可選）。例如：烹飪時，delete_item_4 可能是「糖」。")
-            delete_item_5: Optional[Literal[*available_items] if available_items else str] = Field(None, description="要刪除的第五個物品名稱（可選）。例如：烹飪時，delete_item_5 可能是「鹽」。")
+        # --- 在 update_schema 內部重新定義所有 Function Schemas ---
+
+        class ModifyWorldItemsFunction(BaseModel): # 與 AI_System.ModifyWorldItemsFunction 結構和描述相同
+            function_type: Literal["modify_world_items"] = Field("modify_world_items", description="固定值，表示這是一個通用的物品修改功能。")
             
-            create_item_1: str = Field(description="要創建的第一個新物品名稱（必填）。例如：砍樹時，create_item_1 可能是「木材」。")
-            create_item_1_description: str = Field(description="第一個新物品的詳細描述。例如：「一塊粗糙的木材，可用於建造或製作工具。」")
-            create_item_2: Optional[str] = Field(None, description="要創建的第二個新物品名稱（可選）。例如：砍樹時，create_item_2 可能是「樹枝」。")
-            create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「一些細長的樹枝，可用於生火或簡單工藝。」")
-            create_item_3: Optional[str] = Field(None, description="要創建的第三個新物品名稱（可選）。例如：砍樹時，create_item_3 可能是「樹葉」。")
-            create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「一堆綠色的樹葉，可用於裝飾或製作草藥。」")
-            create_item_4: Optional[str] = Field(None, description="要創建的第四個新物品名稱（可選）。")
-            create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。")
-            create_item_5: Optional[str] = Field(None, description="要創建的第五個新物品名稱（可選）。")
-            create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。")
-        
-        class GeneralResponse(BaseModel):
+            # 應用動態 Literal
+            delete_item_1: Optional[DeleteOrModifyTargetLiteral] = Field(None, description="要刪除的第一個物品的名稱。例如：在烹飪時，這可能是「生雞肉」。如果本次操作不刪除任何物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+            delete_item_2: Optional[DeleteOrModifyTargetLiteral] = Field(None, description="要刪除的第二個物品的名稱。例如：烹飪時的「蔬菜」。如果本次操作不刪除超過一個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+            delete_item_3: Optional[DeleteOrModifyTargetLiteral] = Field(None, description="要刪除的第三個物品的名稱。例如：製作藥水時的「藥草A」。如果本次操作不刪除超過兩個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+            delete_item_4: Optional[DeleteOrModifyTargetLiteral] = Field(None, description="要刪除的第四個物品的名稱。例如：製作複雜裝置時的「零件X」。如果本次操作不刪除超過三個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+            delete_item_5: Optional[DeleteOrModifyTargetLiteral] = Field(None, description="要刪除的第五個物品的名稱。例如：獻祭儀式中消耗的「魔法水晶」。如果本次操作不刪除超過四個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
+
+            # 創建部分的描述和結構保持不變
+            create_item_1_name: Optional[str] = Field(None, description="要創建的第一個新物品的名稱。例如：「香煎雞排」。如果本次操作不創建任何物品或不使用此欄位，請保持為 None。")
+            create_item_1_description: Optional[str] = Field(None, description="第一個新物品的詳細描述。必須提供如果 create_item_1_name 被指定。例如：「一塊用香料精心烹製，外皮金黃酥脆、肉質鮮嫩多汁的雞排。」")
+            create_item_2_name: Optional[str] = Field(None, description="要創建的第二個新物品的名稱。例如：「蔬菜沙拉」。")
+            create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「一份由新鮮生菜、番茄、小黃瓜和橄欖組成的清爽沙拉，淋上了特製油醋汁。」")
+            create_item_3_name: Optional[str] = Field(None, description="要創建的第三個新物品的名稱。例如：「治療藥水」。")
+            create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「一瓶散發著淡淡草藥香氣的紅色藥水，據說能迅速治癒傷口。」")
+            create_item_4_name: Optional[str] = Field(None, description="要創建的第四個新物品的名稱。例如：「木柴捆」。")
+            create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。例如：「一捆由砍伐樹木得到的乾燥木柴，適合用作燃料。」")
+            create_item_5_name: Optional[str] = Field(None, description="要創建的第五個新物品的名稱。例如：「精緻的木雕」。")
+            create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。例如：「一個用優質木材精心雕刻而成的小鳥擺飾，栩栩如生。」")
+            # 這裡也應包含 ModifyWorldItemsFunction 的完整描述文字和範例 (從 AI_System 類級別複製過來)
+            # 例如："這是一個高度通用的物品操作功能..."
+
+        class ChangeItemDescriptionFunction(BaseModel): # 結構和描述相同
+            function_type: Literal["change_item_description"] = Field("change_item_description", description="固定值，表示這是一個修改物品描述的功能。")
+            # 應用動態 Literal
+            item_name: DeleteOrModifyTargetLiteral = Field(description="要修改描述的物品名稱。用於物品狀態變化但不需要創建新物品時，例如：物品被使用後狀態改變、物品被修理或損壞。此物品必須是 NPC 正在互動的物品之一。")
+            new_description: str = Field(description="物品的新描述，反映其當前狀態。例如：「杯子裡現在裝滿了水」或「手機屏幕有了裂痕」。")
+
+        class MoveItemToInventoryFunction(BaseModel): # 結構和描述相同
+            function_type: Literal["move_item_to_inventory"] = Field("move_item_to_inventory", description="固定值，表示這是一個將物品從空間移動到 NPC 庫存的功能。")
+            # 應用動態 Literal
+            item_name: DeleteOrModifyTargetLiteral = Field(description="要移動到 NPC 庫存的物品名稱。用於 NPC 撿起或收集空間中的物品時，例如：撿起地上的鑰匙、從桌上拿起書本。此物品必須是 NPC 正在互動的目標物品(target_item)且位於空間中。")
+
+        class MoveItemFromInventoryToSpaceFunction(BaseModel): # 結構和描述相同
+            function_type: Literal["move_item_from_inventory_to_space"] = Field("move_item_from_inventory_to_space", description="固定值，表示這是一個將物品從 NPC 庫存移動到空間的功能。")
+            # 應用動態 Literal
+            item_name: MoveFromInventoryLiteral = Field(description="要從 NPC 庫存中取出並放置到空間的物品名稱。用於 NPC 將物品從庫存中拿出並放置在當前空間時，例如：放下背包、擺放物品。此物品必須是 NPC 庫存中的物品之一。")
+
+        # --- 在 update_schema 內部重新定義 GeneralResponse ---
+        class GeneralResponse(BaseModel): # 為了避免與外部 GeneralResponse 命名衝突，或可以就叫 GeneralResponse
+            # reasoning, function, response_to_AI 的描述都從 AI_System.GeneralResponse 複製過來
             reasoning: str = Field(description="""
-            系統對 NPC 行為的內部分析和思考。請詳細分析 NPC 的互動意圖，考慮物品的性質、位置和可能的變化。
-            例如：
-            - 當 NPC 從冰箱拿飲料時：「NPC 想從冰箱取出飲料，這是一個從儲存空間獲取物品的行為，應該創建一個新的飲料物品。」
-            - 當 NPC 砍樹時：「NPC 正在砍伐樹木，這會導致樹被移除，並產生木材、樹枝等新物品。應該刪除樹並創建多個新物品。」
-            - 當 NPC 烹飪時：「NPC 正在使用鍋子和多種食材烹飪，這會消耗食材並產生新的料理。應該保留鍋子，刪除食材，並創建新的料理物品。」
+            系統對 NPC 行為的內部分析和思考。請詳細分析 NPC 的互動意圖 (how_to_interact) 以及涉及的物品 (target_item 和 inventory_items)，
+            考慮物品的性質、位置和可能的變化，並說明你為什麼選擇接下來的 function (如果有的話)。
+            範例思考：
+            - NPC 說要「用鐵砧和鐵錘把彎曲的鐵條打直」。目標物品是「鐵砧」，庫存物品是「鐵錘」和「彎曲的鐵條」。這是一個物品轉換的過程。
+              我應該使用 ModifyWorldItemsFunction，刪除「彎曲的鐵條」，保留「鐵砧」和「鐵錘」(不刪除它們)，然後創建一個「筆直的鐵條」。
+            - NPC 說要「從冰箱裡拿出牛奶和雞蛋」。目標物品是「冰箱」。這是一個從儲存容器獲取物品的行為。
+              我應該使用 ModifyWorldItemsFunction，不刪除任何物品 (冰箱本身通常不被消耗)，然後創建「牛奶」和「雞蛋」。
+            - NPC 說要「檢查一下這個奇怪的裝置」。目標物品是「奇怪的裝置」。NPC 只是觀察，沒有明確要改變它或產生新東西。
+              這種情況下，可能不需要调用任何 function 來改變世界狀態，只需更新物品描述 (如果裝置的狀態因檢查而改變)，或者在 response_to_AI 中描述 NPC 的發現即可。如果只是觀察且物品無變化，則 function 為 None。
             """)
             
             function: Optional[Union[
-                CreateItemsFunction,
-                DeleteItemFunction,
+                ModifyWorldItemsFunction, # 注意：這裡指向的是在 update_schema 內部剛剛定義的 ModifyWorldItemsFunction
                 ChangeItemDescriptionFunction,
-                DeleteAndCreateNewItemFunction,
                 MoveItemToInventoryFunction,
-                MoveItemFromInventoryToSpaceFunction,
-                DeleteMultipleAndCreateMultipleFunction
+                MoveItemFromInventoryToSpaceFunction
             ]] = Field(None, description="""
-            根據 NPC 的互動意圖選擇適當的功能。不同場景應使用不同功能：
+            根據 NPC 的互動意圖選擇最合適的功能來改變世界狀態。請仔細閱讀每個功能的描述和適用場景：
             
-            1. 從儲存空間取出物品（如冰箱拿飲料或多種食材）：使用 CreateItemsFunction
-            例：NPC 從冰箱拿出可樂 → CreateItemsFunction(create_item_1="可樂", create_item_1_description="冰涼的可樂", ...)
-            例：NPC 從冰箱拿出多種食材 → CreateItemsFunction(create_item_1="雞肉", create_item_2="蔬菜", ...)
-            
-            2. 撿起空間中的物品：使用 MoveItemToInventoryFunction
-            例：NPC 撿起鑰匙 → MoveItemToInventoryFunction(item_name="鑰匙")
-            
-            3. 放下庫存中的物品：使用 MoveItemFromInventoryToSpaceFunction
-            例：NPC 放下背包 → MoveItemFromInventoryToSpaceFunction(item_name="背包")
-            
-            4. 物品狀態變化但不需替換：使用 ChangeItemDescriptionFunction
-            例：NPC 使用杯子裝水 → ChangeItemDescriptionFunction(item_name="杯子", new_description="裝滿水的杯子")
-            
-            5. 單一物品轉換為另一物品：使用 DeleteAndCreateNewItemFunction
-            例：NPC 修理破損物品 → DeleteAndCreateNewItemFunction(old_item_name="破損手錶", new_item_name="修好的手錶", ...)
-            
-            6. 複雜互動（如砍樹、烹飪、合成）：使用 DeleteMultipleAndCreateMultipleFunction
-            例：NPC 砍樹 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="樹", create_item_1="木材", create_item_2="樹枝", ...)
-            例：NPC 烹飪 → DeleteMultipleAndCreateMultipleFunction(delete_item_1="雞肉", delete_item_2="蔬菜", create_item_1="炒雞肉", ...)
-            
-            7. 消耗或丟棄單一物品：使用 DeleteItemFunction
-            例：NPC 吃掉蘋果 → DeleteItemFunction(item_name="蘋果")
+            1.  **ModifyWorldItemsFunction**: 這是最主要和最通用的物品操作功能。
+                適用於任何涉及**創建新物品**或**刪除現有物品**的場景 (或者兩者同時發生)。
+                - **純粹創建**: NPC 從某處 (如魔法源、容器、NPC的技能) 創造出新物品，而沒有消耗任何現有物品。
+                  (所有 `delete_item_X` 欄位為 `None`；至少一個 `create_item_X_name` 被指定)。
+                  例：NPC 從「冰箱」拿出「果汁」和「三明治」 -> `ModifyWorldItemsFunction(create_item_1_name="果汁", create_item_2_name="三明治", ...)`
+                - **純粹刪除/消耗**: NPC 消耗、摧毀或丟棄物品，而沒有產生任何新物品。
+                  (所有 `create_item_X_name` 欄位為 `None`；至少一個 `delete_item_X` 被指定)。
+                  例：NPC 吃掉「麵包」 -> `ModifyWorldItemsFunction(delete_item_1="麵包")`
+                - **轉換/製作/合成/加工**: NPC 使用一些物品，這些物品被消耗 (刪除)，然後產生了新的物品 (創建)。
+                  (同時指定 `delete_item_X` 和 `create_item_X_name` 欄位)。
+                  例：NPC 用「木頭」和「釘子」製作「小凳子」 -> `ModifyWorldItemsFunction(delete_item_1="木頭", delete_item_2="釘子", create_item_1_name="小凳子", ...)`
+                  例：NPC 砍伐「松樹」得到「松木」和「松果」 -> `ModifyWorldItemsFunction(delete_item_1="松樹", create_item_1_name="松木", create_item_2_name="松果", ...)`
+                - **物品替換**: 一個舊物品被一個新物品取代 (通常是狀態的重大改變)。
+                  例：NPC 修理「破損的護符」變成「完好的護符」 -> `ModifyWorldItemsFunction(delete_item_1="破損的護符", create_item_1_name="完好的護符", ...)`
+                **請注意**: `delete_item_X` 指定的物品必須是 NPC 本次互動明確涉及的物品 (target_item 或 inventory_items)。
+
+            2.  **ChangeItemDescriptionFunction**: 當物品的**狀態發生了變化**，但物品本身沒有被替換、創建或刪除，只是其描述需要更新時使用。
+                例：NPC 把「空杯子」裝滿水 -> `ChangeItemDescriptionFunction(item_name="空杯子", new_description="一個裝滿了清水的杯子")`
+                例：NPC 使用「電腦」上網後，電腦狀態可能沒有物理變化，但可以更新描述為「一台剛被使用過的電腦，螢幕還微熱」。
+
+            3.  **MoveItemToInventoryFunction**: 當 NPC 從其**當前所處的空間中拾取某個物品**，並將其放入自己的庫存時使用。
+                例：NPC 從地上撿起「鑰匙」 -> `MoveItemToInventoryFunction(item_name="鑰匙")`
+
+            4.  **MoveItemFromInventoryToSpaceFunction**: 當 NPC 從**自己的庫存中取出某個物品**，並將其放置到當前所處的空間時使用。
+                例：NPC 從背包中拿出「營火工具組」並放置在地上 -> `MoveItemFromInventoryToSpaceFunction(item_name="營火工具組")`
+                
+            如果 NPC 的行為不直接導致上述任何世界狀態的改變 (例如，NPC 只是在觀察、思考、或與環境進行非物品實體層面的互動)，則 function 欄位應為 `None`。
             """)
             
             response_to_AI: str = Field(description="""
-            系統對 NPC 的回應，描述行為結果。請使用生動、具體的語言描述 NPC 互動的結果和世界狀態的變化。
-            例如：
-            - 當 NPC 從冰箱拿飲料時：「你打開冰箱，拿出一瓶冰涼的可樂。冰涼的觸感讓你感到舒爽。」
-            - 當 NPC 砍樹時：「你用力砍倒了這棵樹。樹倒下後，你收集了幾塊優質木材和一些樹枝。」
-            - 當 NPC 烹飪時：「你熟練地將雞肉和蔬菜放入鍋中翻炒，很快一盤香噴噴的炒雞肉就做好了。廚房裡彌漫著誘人的香氣。」
-            - 當 NPC 使用電腦時：「你打開電腦，開始瀏覽網頁。屏幕的藍光照亮了你的臉龐，你感到沉浸在信息的海洋中。」
+            系統對 NPC 的回應，用自然語言描述 NPC 互動的結果以及世界狀態發生的具體變化。
+            請務必生動、具體、且與執行的 function (如果有的話) 的結果保持一致。
+            範例：
+            - (使用 ModifyWorldItemsFunction 烹飪後): "你巧妙地將生雞肉和蔬菜一起下鍋，隨著一陣翻炒，廚房裡很快彌漫開誘人的香氣。一盤熱騰騰、香噴噴的炒時蔬雞丁就完成了！看起來非常美味。"
+            - (使用 ModifyWorldItemsFunction 砍樹後): "你揮動斧頭，伴隨著木屑飛濺和清脆的斷裂聲，那棵松樹應聲倒下。你從中收集到了幾段結實的松木和一些還帶著清香的松果。"
+            - (使用 ModifyWorldItemsFunction 從冰箱拿東西後): "你打開冰箱，冷氣撲面而來。你迅速找到了冰涼的牛奶和一盒新鮮的雞蛋，並把它們拿了出來。"
+            - (使用 ChangeItemDescriptionFunction 給杯子裝水後): "你將空杯子湊到水龍頭下，清澈的水流注入其中，很快就裝滿了。現在這是一個盛著清水的杯子。"
+            - (使用 MoveItemToInventoryFunction 撿起鑰匙後): "你彎下腰，撿起了掉在地上的那把冰冷的黃銅鑰匙，並將它妥善地放進了你的口袋裡。"
+            - (如果 function 為 None，NPC 只是觀察): "你仔細地端詳著牆上的那幅古老畫像，畫中人物的眼神似乎帶有一絲神秘，但你並沒有發現任何可以互動的機關或線索。"
             """)
-        
+
         return GeneralResponse
 
-
-
-    def initialize_world(self, world: Dict[str, Any]):
-        """
-        初始化系統並儲存世界狀態的引用。
-        Args:
-            world: 包含世界狀態的字典
-        """
-        print("[DEBUG] initialize_world: world keys before assignment:", list(world.keys()))
-        self.world = world
-        print("[DEBUG] initialize_world: self.world keys after assignment:", list(self.world.keys()))
-
-    def process_interaction(self, npc: "NPC", item_name: str, how_to_interact: str) -> str:
+# --- 以下是 AI_System 其他方法的示意，實際內容待填充 ---
+    def process_interaction(self, npc: "NPC", target_item_name: str, inventory_item_names: List[str], how_to_interact: str) -> str:
         """
         處理 NPC 與物品的互動。
+        根據 NPC 的意圖、涉及的物品以及當前世界狀態，調用 LLM 來決定如何修改世界，
+        並執行相應的操作。
+
         Args:
-            npc: 執行互動的 NPC
-            item_name: 互動物品的名稱
-            how_to_interact: 描述 NPC 如何與物品互動
+            npc: 執行互動的 NPC 物件。
+            target_item_name: NPC 主要互動的目標物品的名稱。
+            inventory_item_names: NPC 從其庫存中選取用於此次互動的輔助物品的名稱列表。
+            how_to_interact: NPC 描述它希望如何與這些物品互動的自然語言字串。
+
         Returns:
-            互動結果的描述字串
+            一個描述互動結果的自然語言字串，將回傳給 NPC。
         """
-        print(f"[DEBUG] process_interaction: self.world keys = {list(self.world.keys())}")
-        # 確認物品存在
-        target_item = None
-        item_location = None
-        
-        # 檢查 NPC 的庫存
-        for item in npc.inventory.items:
-            if item.name == item_name:
-                target_item = item
-                item_location = "inventory"
+        global client # 假設 OpenAI client 是全局可用的
+
+        # --- 1. 獲取並驗證互動中涉及的所有物品實體 ---
+        target_item_object: Optional["Item"] = None # Forward reference for Item
+        item_location_info = ""
+
+        # 首先在 NPC 當前空間查找目標物品
+        for item_in_space in npc.current_space.items:
+            if item_in_space.name == target_item_name:
+                target_item_object = item_in_space
+                item_location_info = f"目標物品 '{target_item_name}' 位於空間 '{npc.current_space.name}'。"
                 break
         
-        # 檢查當前空間
-        if target_item is None:
-            for item in npc.current_space.items:
-                if item.name == item_name:
-                    target_item = item
-                    item_location = "space"
+        if not target_item_object:
+            for item_in_inv in npc.inventory.items:
+                if item_in_inv.name == target_item_name:
+                    target_item_object = item_in_inv
+                    item_location_info = f"目標物品 '{target_item_name}' 位於 NPC '{npc.name}' 的庫存中。"
                     break
         
-        if target_item is None:
-            return f"找不到名為 '{item_name}' 的物品。"
+        if not target_item_object:
+            return f"系統錯誤：找不到名為 '{target_item_name}' 的目標物品。互動中止。"
+
+        list_of_inventory_item_objects: List["Item"] = [] # Forward reference for Item
+        inventory_items_info_lines = []
+        if inventory_item_names:
+            inventory_items_info_lines.append("NPC 使用的庫存物品：")
+            for inv_item_name in inventory_item_names:
+                found_inv_item = False
+                for item_obj in npc.inventory.items:
+                    if item_obj.name == inv_item_name:
+                        list_of_inventory_item_objects.append(item_obj)
+                        inventory_items_info_lines.append(f"- '{item_obj.name}' (描述：'{item_obj.description}')")
+                        found_inv_item = True
+                        break
+                if not found_inv_item:
+                    return f"系統錯誤：NPC '{npc.name}' 的庫存中找不到名為 '{inv_item_name}' 的物品。互動中止。"
+
+        # --- 2. 準備傳遞給 update_schema 的物品名稱列表 ---
+        available_items_for_interaction = [target_item_object.name] + [item.name for item in list_of_inventory_item_objects]
+        npc_complete_inventory = [item.name for item in npc.inventory.items]
+
+        # --- 3. 動態生成 AI_System 使用的 Schema ---
+        # GeneralResponse_For_This_Interaction 就是 self.update_schema 返回的那個在方法內部定義的 GeneralResponse 類
+        GeneralResponse_For_This_Interaction = self.update_schema(available_items_for_interaction, npc_complete_inventory)
+
+        # --- 4. 建構詳細的互動上下文 (Context) 給 LLM ---
+        context_lines = [
+            f"NPC '{npc.name}' (描述：'{npc.description}') 正在嘗試執行以下操作：'{how_to_interact}'.",
+            item_location_info,
+            f"主要目標物品詳細資訊：'{target_item_object.name}' (描述：'{target_item_object.description}', 屬性：{target_item_object.properties})."
+        ]
+        context_lines.extend(inventory_items_info_lines) # 加入使用的庫存物品資訊 (如果有的話)
+        context_lines.append(f"目前世界時間：{self.time}, 天氣：{self.weather}.")
+        # 移除了NPC完整物品庫的列表，因為 schema 的 Literal 已經處理了選擇範圍。
+        # 但仍然告知 LLM 本次互動明確涉及的物品，有助於它理解 why 這些物品會出現在 Literal 中。
+        context_lines.append(f"本次互動明確涉及的物品有：{', '.join(available_items_for_interaction) if available_items_for_interaction else '無明確目標物品 (可能為純粹的環境互動或無物品技能)' }。請確保你的功能選擇 (如刪除物品) 嚴格基於這些明確涉及的物品。")
         
-        # 準備互動訊息
-        interaction_message = {
-            "role": "system",
-            "content": f"{npc.name} 正在嘗試與 {item_name} 互動：{how_to_interact}\n"
-                      f"物品描述: {target_item.description}\n"
-                      f"物品位置: {'NPC 的庫存中' if item_location == 'inventory' else '當前空間'}"
-        }
+        interaction_prompt_content = "\\n".join(context_lines)
         
-        # 將互動訊息加入歷史記錄
-        self.history.append(interaction_message)
+        messages_for_llm = [
+            {"role": "system", "content": "你是一個負責根據 NPC 意圖和世界狀態來決定如何修改遊戲世界的 AI 系統。請仔細分析以下提供的完整情境，然後根據你的理解，選擇一個最合適的 `function` 來執行（其參數選項已根據情境被限定），同時提供你的 `reasoning`（思考過程）和給 NPC 的 `response_to_AI`（自然語言回應）。如果 NPC 的意圖不需要改變世界物品狀態（例如只是觀察），則 `function` 應該為 `None`。"},
+            {"role": "user", "content": interaction_prompt_content}
+        ]
         
-        # 使用 AI 來解釋互動並生成響應
-        completion = client.beta.chat.completions.parse(
-            model="gpt-4o-2024-11-20",
-            messages=self.history,
-            response_format=self.GeneralResponse
-        )
-        response = completion.choices[0].message.parsed
-        
-        # 將 AI 的解釋和響應添加到歷史記錄
+        print("\\n=== AI_System 向 LLM 發送的內容 ===")
+        print(f"模型: gpt-4o-2024-11-20")
+        print(interaction_prompt_content)
+        print("================================\\n")
+
+        # --- 5. 呼叫 LLM 並使用動態 Schema 解析回應 ---
+        try:
+            completion = client.beta.chat.completions.parse(
+                model="gpt-4o-2024-11-20", # 使用指定的模型
+                messages=messages_for_llm,
+                response_format=GeneralResponse_For_This_Interaction # 使用 update_schema 返回的動態類
+            )
+            ai_system_response = completion.choices[0].message.parsed
+        except Exception as e:
+            error_msg = f"AI_System在與LLM溝通或解析回應時發生錯誤: {str(e)}"
+            print(f"[錯誤] {error_msg}")
+            return f"我現在有點糊塗，暫時無法完成 '{how_to_interact}' 這個操作。"
+
+        print("\\n=== AI_System 從 LLM 收到的原始回應 (parsed) ===")
+        print(ai_system_response)
+        print("===========================================\\n")
+
+        # --- 6. 記錄 AI_System 的思考和給 NPC 的回應到其歷史 ---
         self.history.append({
-            "role": "assistant",
-            "content": f"系統思考: {response.reasoning}\n回應: {response.response_to_AI}"
+            "role": "assistant", 
+            "content": f"針對NPC '{npc.name}' 的意圖 '{how_to_interact}' (涉及物品: {', '.join(available_items_for_interaction)}):\\n  系統思考: {ai_system_response.reasoning}\\n  計劃給NPC的回應: {ai_system_response.response_to_AI}"
         })
-        
-        # 處理可能的功能調用
-        if response.function:
-            result = self._handle_function(response.function, npc)
-            if result:
+
+        # --- 7. 處理 AI_System.Function 呼叫 ---
+        function_execution_details = "沒有執行功能。"
+        if ai_system_response.function:
+            try:
+                function_execution_details = self._handle_function(ai_system_response.function, npc, available_items_for_interaction)
                 self.history.append({
-                    "role": "system",
-                    "content": f"系統執行功能: {result}"
+                    "role": "system", 
+                    "content": f"系統執行功能 (由NPC '{npc.name}' 觸發，意圖: '{how_to_interact}'):\\n  功能類型: {str(ai_system_response.function.function_type if hasattr(ai_system_response.function, 'function_type') else '未知')}\\n  功能參數: {str(ai_system_response.function.model_dump(exclude_none=True))}\\n  執行結果: {function_execution_details}"
                 })
-        
-        return response.response_to_AI
-    
-    def _handle_function(self, function: Any, npc: "NPC") -> str:
+            except Exception as e:
+                error_msg = f"AI_System在執行內部功能 '{str(ai_system_response.function.function_type if hasattr(ai_system_response.function, 'function_type') else '未知')}' 時發生錯誤: {str(e)}"
+                print(f"[錯誤] {error_msg}")
+                self.history.append({"role": "system", "content": f"[錯誤日誌] {error_msg}"})
+                return f"我在嘗試 '{how_to_interact}' 的時候遇到了一些內部問題，可能沒有完全成功。"
+
+        # --- 8. 返回給 NPC 的結果 ---
+        return ai_system_response.response_to_AI
+
+    def _handle_function(self, function_call: Any, npc: "NPC", available_items_for_interaction: List[str]) -> str:
         """
-        根據功能類型處理功能調用。
+        根據 LLM 返回的 function_call 物件的類型，分派給相應的內部方法執行世界狀態的修改。
+
         Args:
-            function: 要執行的功能
-            npc: 觸發功能的 NPC
+            function_call: LLM 選擇的 Function 物件的實例。
+                           它將是 AI_System.update_schema 內部定義的某個動態 Function 類別的實例。
+            npc: 執行此互動的 NPC 物件。
+            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表
+                                             (target_item + inventory_items from NPC's action)。
+                                             用於在具體操作方法中進行額外的合法性驗證。
         Returns:
-            功能執行結果的描述
+            一個描述功能執行結果的字串。
         """
-        if hasattr(function, "function_type"):
-            if function.function_type == "create_item":
-                return self._create_item(function.item_name, function.description, function.space_name)
-            elif function.function_type == "delete_item":
-                return self._delete_item(function.item_name, function.space_name, function.npc_name)
-            elif function.function_type == "change_item_description":
-                return self._change_item_description(function.item_name, function.new_description)
-            elif function.function_type == "delete_and_create_new_item":
-                return self._delete_and_create_new_item(
-                    function.old_item_name, function.new_item_name, 
-                    function.new_description, function.space_name
-                )
-            elif function.function_type == "move_item_to_inventory":
-                return self._move_item_to_inventory(function.item_name, function.npc_name)
+        if not function_call: # LLM 可能決定不執行任何 function
+            return "沒有功能被執行。"
+
+        # 檢查 function_call 是否真的有 function_type 屬性，以防意外
+        if not hasattr(function_call, 'function_type'):
+            error_msg = f"收到的 function_call 物件缺少 'function_type' 屬性: {function_call}"
+            print(f"[錯誤] {error_msg}")
+            return f"系統內部錯誤：功能調用格式不正確。"
+
+        function_type = function_call.function_type
+        print(f"[系統日誌] _handle_function 接收到功能類型: {function_type}")
+        print(f"[系統日誌] 功能參數: {function_call.model_dump(exclude_none=True)}")
+
+
+        if function_type == "modify_world_items":
+            # 斷言以確保類型正確，雖然 Pydantic 在解析時應該已經保證了
+            # 實際上，由於 function_call 是動態類型，這裡的 isinstance 檢查可能不夠直接
+            # 我們主要依賴 function_type 字串來判斷
+            # if not isinstance(function_call, self.ModifyWorldItemsFunction): # 這裡的 self.ModifyWorldItemsFunction 是靜態藍本
+            #     return f"內部錯誤：modify_world_items 功能的類型不匹配。"
+            return self._modify_world_items_impl(function_call, npc, available_items_for_interaction)
         
-        return "未知的功能類型。"
-    
-    def _create_item(self, item_name: str, description: str, space_name: str) -> str:
-        print(f"[DEBUG] _create_item: self.world keys = {list(self.world.keys())}")
-        if "spaces" not in self.world:
-            return f"錯誤：world 結構異常，缺少 'spaces'。目前 world: {self.world}"
-        space = self.world["spaces"].get(space_name)
-        if not space:
-            return f"找不到名為 '{space_name}' 的空間。"
-        # 創建新物品（不再需要 interactions）
-        new_item = Item(
-            name=item_name,
-            description=description,
-            properties={}  # 默認空屬性
-        )
-        # 將物品添加到世界物品字典中
-        self.world["items"][item_name] = new_item
-        # 將物品添加到空間
-        space.items.append(new_item)
-        return f"已在空間 '{space_name}' 創建新物品 '{item_name}'。"
-    
-    def _delete_item(self, item_name: str, space_name: Optional[str], npc_name: Optional[str]) -> str:
-        """從空間或 NPC 庫存中刪除物品。"""
-        # 從空間中刪除
-        if space_name:
-            space = self.world["spaces"].get(space_name)
-            if not space:
-                return f"找不到名為 '{space_name}' 的空間。"
+        elif function_type == "change_item_description":
+            # if not isinstance(function_call, self.ChangeItemDescriptionFunction):
+            #     return f"內部錯誤：change_item_description 功能的類型不匹配。"
+            return self._change_item_description_impl(function_call, npc, available_items_for_interaction)
             
-            for i, item in enumerate(space.items):
-                if item.name == item_name:
-                    space.items.pop(i)
-                    # 如果物品不被任何其他地方引用，則從世界中刪除
-                    if item_name in self.world["items"]:
-                        del self.world["items"][item_name]
-                    return f"從 {space_name} 刪除了物品: {item_name}"
+        elif function_type == "move_item_to_inventory":
+            # if not isinstance(function_call, self.MoveItemToInventoryFunction):
+            #     return f"內部錯誤：move_item_to_inventory 功能的類型不匹配。"
+            return self._move_item_to_inventory_impl(function_call, npc, available_items_for_interaction)
+            
+        elif function_type == "move_item_from_inventory_to_space":
+            # if not isinstance(function_call, self.MoveItemFromInventoryToSpaceFunction):
+            #     return f"內部錯誤：move_item_from_inventory_to_space 功能的類型不匹配。"
+            return self._move_item_from_inventory_to_space_impl(function_call, npc) # 此功能的操作對象來自NPC完整庫存，其合法性在schema生成時已限定
+
+        else:
+            error_msg = f"未知的 function_type: '{function_type}'"
+            print(f"[警告] {error_msg}")
+            return error_msg
+
+    def _modify_world_items_impl(self, function_call: Any, npc: "NPC", available_items_for_interaction: List[str]) -> str:
+        """
+        實現 ModifyWorldItemsFunction 的核心邏輯：處理物品的刪除和創建。
+
+        Args:
+            function_call: LLM 返回的、AI_System.update_schema 內部定義的 ModifyWorldItemsFunction 類的實例。
+                         它包含了 delete_item_X 和 create_item_X_name/description 等欄位。
+            npc: 執行此互動的 NPC 物件。
+            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表。
+                                             用於驗證 delete_item_X 的合法性。
+        Returns:
+            一個描述物品修改結果的字串。
+        """
+        results_log = [] # 用於記錄每一步操作的結果，最後匯總
+
+        # --- 1. 處理物品刪除 ---
+        items_to_delete_names: List[str] = []
+        if hasattr(function_call, 'delete_item_1') and function_call.delete_item_1: items_to_delete_names.append(function_call.delete_item_1)
+        if hasattr(function_call, 'delete_item_2') and function_call.delete_item_2: items_to_delete_names.append(function_call.delete_item_2)
+        if hasattr(function_call, 'delete_item_3') and function_call.delete_item_3: items_to_delete_names.append(function_call.delete_item_3)
+        if hasattr(function_call, 'delete_item_4') and function_call.delete_item_4: items_to_delete_names.append(function_call.delete_item_4)
+        if hasattr(function_call, 'delete_item_5') and function_call.delete_item_5: items_to_delete_names.append(function_call.delete_item_5)
         
-        # 從 NPC 庫存中刪除
-        if npc_name:
-            npc = self.world["npcs"].get(npc_name)
-            if not npc:
-                return f"找不到名為 '{npc_name}' 的 NPC。"
-            
-            for i, item in enumerate(npc.inventory.items):
-                if item.name == item_name:
+        successfully_deleted_item_names: List[str] = []
+
+        for item_name_to_delete in items_to_delete_names:
+            if not item_name_to_delete: # 以防萬一，雖然 Pydantic Optional 應該處理了
+                continue
+
+            # **驗證1：要刪除的物品是否在本次互動明確涉及的物品列表中**
+            if item_name_to_delete not in available_items_for_interaction:
+                msg = f"警告：AI 試圖刪除未在本次互動中明確指定的物品 '{item_name_to_delete}'。已忽略此刪除操作。"
+                print(f"[警告] {msg}")
+                results_log.append(msg)
+                continue
+
+            deleted_from_where = None
+            # 嘗試從 NPC 庫存中刪除
+            item_found_in_inventory = False
+            for i, item_in_inv in enumerate(npc.inventory.items):
+                if item_in_inv.name == item_name_to_delete:
                     npc.inventory.items.pop(i)
-                    # 如果物品不被任何其他地方引用，則從世界中刪除
-                    if item_name in self.world["items"]:
-                        del self.world["items"][item_name]
-                    return f"從 {npc_name} 的庫存中刪除了物品: {item_name}"
+                    deleted_from_where = f"NPC '{npc.name}' 的庫存"
+                    item_found_in_inventory = True
+                    break
+            
+            # 如果不在 NPC 庫存，嘗試從當前空間刪除
+            if not item_found_in_inventory:
+                item_found_in_space = False
+                for i, item_in_space in enumerate(npc.current_space.items):
+                    if item_in_space.name == item_name_to_delete:
+                        npc.current_space.items.pop(i)
+                        deleted_from_where = f"空間 '{npc.current_space.name}'"
+                        item_found_in_space = True
+                        break
+                
+                if not item_found_in_space:
+                    msg = f"警告：在嘗試刪除時，未能從 NPC 庫存或當前空間找到物品 '{item_name_to_delete}'（即使它在 available_items_for_interaction 中）。"
+                    print(f"[警告] {msg}")
+                    results_log.append(msg)
+                    continue # 繼續處理下一個要刪除的物品
+
+            # 如果物品成功從某處刪除，也嘗試從全局物品列表 self.world["items"] 中移除
+            # 注意：這裡需要更完善的引用計數機制，如果該物品實例還被其他地方引用（例如另一個NPC的庫存），則不應從全局移除。
+            # 簡化處理：如果全局字典中有同名物品，就直接刪除。在更複雜的系統中，物品應該有唯一ID。
+            if deleted_from_where and item_name_to_delete in self.world.get("items", {}):
+                try:
+                    del self.world["items"][item_name_to_delete]
+                    msg = f"物品 '{item_name_to_delete}' 已成功從 {deleted_from_where} 和全局物品列表中刪除。"
+                    print(f"[系統日誌] {msg}")
+                    results_log.append(msg)
+                    successfully_deleted_item_names.append(item_name_to_delete)
+                except KeyError:
+                    msg = f"警告：嘗試從全局物品列表刪除 '{item_name_to_delete}' 時發生 KeyError (可能已被其他操作刪除)。"
+                    print(f"[警告] {msg}")
+                    results_log.append(msg) # 仍然認為從NPC/空間是成功的
+                    if item_name_to_delete not in successfully_deleted_item_names: # 避免重複添加
+                         successfully_deleted_item_names.append(item_name_to_delete)
+
+            elif deleted_from_where: # 僅從NPC/空間刪除，但全局列表不存在或已刪除
+                msg = f"物品 '{item_name_to_delete}' 已成功從 {deleted_from_where} 刪除。"
+                print(f"[系統日誌] {msg}")
+                results_log.append(msg)
+                successfully_deleted_item_names.append(item_name_to_delete)
+
+        # --- 2. 處理物品創建 ---
+        items_to_create_details: List[Tuple[Optional[str], Optional[str]]] = []
+        if hasattr(function_call, 'create_item_1_name'): items_to_create_details.append((function_call.create_item_1_name, getattr(function_call, 'create_item_1_description', None)))
+        if hasattr(function_call, 'create_item_2_name'): items_to_create_details.append((function_call.create_item_2_name, getattr(function_call, 'create_item_2_description', None)))
+        if hasattr(function_call, 'create_item_3_name'): items_to_create_details.append((function_call.create_item_3_name, getattr(function_call, 'create_item_3_description', None)))
+        if hasattr(function_call, 'create_item_4_name'): items_to_create_details.append((function_call.create_item_4_name, getattr(function_call, 'create_item_4_description', None)))
+        if hasattr(function_call, 'create_item_5_name'): items_to_create_details.append((function_call.create_item_5_name, getattr(function_call, 'create_item_5_description', None)))
+
+        successfully_created_item_names: List[str] = []
+
+        for item_name_to_create, item_description in items_to_create_details:
+            if item_name_to_create and item_description: # 必須同時有名稱和描述才創建
+                # **驗證2：要創建的物品名稱是否已存在於全局？** (簡單的重名檢查，可以根據遊戲設計調整)
+                if item_name_to_create in self.world.get("items", {}):
+                    # 處理重名：可以選擇創建一個帶後綴的新物品，或直接覆蓋，或報錯。
+                    # 這裡選擇報錯並跳過，以保持物品名稱的（假設）唯一性。
+                    msg = f"警告：嘗試創建的物品 '{item_name_to_create}' 已存在於世界中。已忽略此創建操作。"
+                    print(f"[警告] {msg}")
+                    results_log.append(msg)
+                    continue
+
+                # 創建新 Item 物件
+                # 注意：Item 類的定義需要在 AI_System 之前，或者使用 Forward Reference "Item"
+                try:
+                    # 假設 Item 類已正確導入或定義
+                    from . import Item # 或者根據您的專案結構調整導入
+                    new_item = Item(
+                        name=item_name_to_create,
+                        description=item_description,
+                        properties={}, # 可以根據需要從 LLM 的 reasoning 或其他地方獲取 properties
+                        # position 和 size 通常在創建時不指定，或由特定邏輯處理
+                    )
+                except ImportError:
+                     return "系統內部錯誤：無法找到 Item 類定義。"
+                except Exception as e:
+                    return f"系統內部錯誤：創建 Item 物件 '{item_name_to_create}' 時失敗: {e}"
+
+
+                # 將新物品添加到 NPC 的庫存
+                add_result = npc.inventory.add_item(new_item) # Inventory.add_item 應該返回一個描述結果的字串
+                
+                # 將新物品添加到全局物品列表 self.world["items"]
+                if "items" not in self.world: # 確保 self.world["items"] 存在
+                    self.world["items"] = {}
+                self.world["items"][new_item.name] = new_item
+                
+                msg = f"新物品 '{new_item.name}' 已成功創建並加入 NPC '{npc.name}' 的庫存 ({add_result.strip('.')})."
+                print(f"[系統日誌] {msg}")
+                results_log.append(msg)
+                successfully_created_item_names.append(new_item.name)
+            
+            elif item_name_to_create and not item_description:
+                msg = f"警告：嘗試創建物品 '{item_name_to_create}' 但缺少描述。已忽略此創建操作。"
+                print(f"[警告] {msg}")
+                results_log.append(msg)
+
+        # --- 3. 匯總結果 ---
+        final_summary_parts = []
+        if successfully_deleted_item_names:
+            final_summary_parts.append(f"成功刪除了物品：{', '.join(successfully_deleted_item_names)}")
+        else:
+            final_summary_parts.append("沒有物品被刪除")
         
-        return f"找不到物品 '{item_name}'。"
-    
-    def _change_item_description(self, item_name: str, new_description: str) -> str:
-        """修改物品的描述。"""
-        # 保證 self.world['items'] 存在，即使為空
-        items = self.world.get("items", {}) 
-        if item_name in items:
-            item = items[item_name]
-            item.description = new_description
-            return f"更新了物品 '{item_name}' 的描述。"
-        return f"找不到物品 '{item_name}'。"
-    
-    def _delete_and_create_new_item(self, old_item_name: str, new_item_name: str, 
-                                   new_description: str, space_name: str) -> str:
-        """刪除舊物品並創建新物品（例如：修復損壞的物品）。"""
-        # 刪除舊物品
-        delete_result = self._delete_item(old_item_name, space_name, None)
-        if "刪除了物品" not in delete_result:
-            return f"無法替換物品：{delete_result}"
+        if successfully_created_item_names:
+            final_summary_parts.append(f"成功創建並將下列物品加入 '{npc.name}' 的庫存：{', '.join(successfully_created_item_names)}")
+        else:
+            final_summary_parts.append("沒有新物品被創建")
+            
+        # 如果 results_log 中有其他警告或特定信息，也可以考慮加入到最終返回給 _handle_function 的字串中
+        # 例如: detailed_log = " 操作詳情: " + " | ".join(results_log)
         
-        # 創建新物品
-        create_result = self._create_item(new_item_name, new_description, space_name)
-        if "創建了新物品" not in create_result:
-            return f"刪除了舊物品，但無法創建新物品：{create_result}"
-        
-        return f"將 '{old_item_name}' 替換為 '{new_item_name}'。"
-    
-    def _move_item_to_inventory(self, item_name: str, npc_name: str) -> str:
-        """將物品從當前空間移動到 NPC 的庫存中。"""
-        npc = self.world["npcs"].get(npc_name)
-        if not npc:
-            return f"找不到名為 '{npc_name}' 的 NPC。"
-        
-        # 在當前空間中查找物品
-        item = None
-        for i, space_item in enumerate(npc.current_space.items):
-            if space_item.name == item_name:
-                item = space_item
-                npc.current_space.items.pop(i)
-                break
-        
-        if not item:
-            return f"在 {npc.current_space.name} 中找不到物品 '{item_name}'。"
-        
-        # 將物品添加到 NPC 的庫存
-        result = npc.inventory.add_item(item)
-        return f"{npc_name} 撿起了 {item_name}。{result}"
+        return "。 ".join(final_summary_parts) + "。"
+
+    def _change_item_description_impl(self, function_call: Any, npc: "NPC", available_items_for_interaction: List[str]) -> str:
+        """
+        實現 ChangeItemDescriptionFunction 的具體操作。
+        這個方法應該根據 function_call 的具體參數來執行相應的操作。
+        例如：修改物品描述、更新物品狀態等。
+
+        Args:
+            function_call: LLM 選擇的 Function 物件的實例。
+            npc: 執行此互動的 NPC 物件。
+            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表
+                                             (target_item + inventory_items from NPC's action)。
+                                             用於在具體操作方法中進行額外的合法性驗證。
+        Returns:
+            一個描述功能執行結果的字串。
+        """
+        # 這裡應該實現 ChangeItemDescriptionFunction 的具體操作邏輯
+        # 例如：修改物品描述、更新物品狀態等
+        return "ChangeItemDescriptionFunction 的具體操作尚未實現。"
+
+    def _move_item_to_inventory_impl(self, function_call: Any, npc: "NPC", available_items_for_interaction: List[str]) -> str:
+        """
+        實現 MoveItemToInventoryFunction 的具體操作。
+        這個方法應該根據 function_call 的具體參數來執行相應的操作。
+        例如：將物品從空間移動到 NPC 庫存、從 NPC 庫存中取出物品等。
+
+        Args:
+            function_call: LLM 選擇的 Function 物件的實例。
+            npc: 執行此互動的 NPC 物件。
+            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表
+                                             (target_item + inventory_items from NPC's action)。
+                                             用於在具體操作方法中進行額外的合法性驗證。
+        Returns:
+            一個描述功能執行結果的字串。
+        """
+        # 這裡應該實現 MoveItemToInventoryFunction 的具體操作邏輯
+        # 例如：將物品從空間移動到 NPC 庫存、從 NPC 庫存中取出物品等
+        return "MoveItemToInventoryFunction 的具體操作尚未實現。"
+
+    def _move_item_from_inventory_to_space_impl(self, function_call: Any, npc: "NPC") -> str:
+        """
+        實現 MoveItemFromInventoryToSpaceFunction 的具體操作。
+        這個方法應該根據 function_call 的具體參數來執行相應的操作。
+        例如：將物品從 NPC 庫存中取出並放置到空間、從 NPC 庫存中取出物品等。
+
+        Args:
+            function_call: LLM 選擇的 Function 物件的實例。
+            npc: 執行此互動的 NPC 物件。
+        Returns:
+            一個描述功能執行結果的字串。
+        """
+        # 這裡應該實現 MoveItemFromInventoryToSpaceFunction 的具體操作邏輯
+        # 例如：將物品從 NPC 庫存中取出並放置到空間、從 NPC 庫存中取出物品等
+        return "MoveItemFromInventoryToSpaceFunction 的具體操作尚未實現。"
 
 
 
@@ -1455,3 +1590,10 @@ class AI_System(BaseModel):
 # Run the sandbox
 if __name__ == "__main__":
     SandBox()
+
+
+
+
+
+#A TODO: List?
+#TODO: Implemente a better Multiple NPCs support, like same room serial run with 1 s delay, different room npc.process_tick should run simultaneously, serial vs parallel. The current way seems to be able to achieve this but way to complicated
