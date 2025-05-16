@@ -8,6 +8,7 @@ import asyncio
 from dataclasses import dataclass, field as dataclass_field
 import heapq
 import sys
+import math
 
 client = OpenAI()
 
@@ -179,6 +180,117 @@ class Inventory(BaseModel):
 #NOTE: Define NPC
 ## 定義 NPC 類
 
+# --- A* Pathfinding Utilities (移至 backend.py) ---
+def heuristic(space_a_pos: Tuple[float, float], space_b_pos: Tuple[float, float]) -> float:
+    """計算兩點之間的歐幾里得距離。"""
+    return math.sqrt((space_a_pos[0] - space_b_pos[0])**2 + (space_a_pos[1] - space_b_pos[1])**2)
+
+def find_path_astar(world_spaces: Dict[str, "Space"], start_space_name: str, goal_space_name: str) -> Optional[List[str]]:
+    """
+    使用 A* 演算法尋找 start_space_name 和 goal_space_name 之間的最短路徑。
+    此版本直接使用 Space 物件的 connected_spaces。
+
+    Args:
+        world_spaces (dict): 空間物件的字典，以名稱為鍵。
+        start_space_name (str): 起始空間的名稱。
+        goal_space_name (str): 目標空間的名稱。
+
+    Returns:
+        list: 代表從起點到終點路徑的空間名稱列表，如果找不到路徑則返回 None。
+    """
+    if not start_space_name or not goal_space_name:
+        print(f"A* 錯誤: 起始或目標空間名稱無效。") # Debugging
+        return None
+    if start_space_name not in world_spaces or goal_space_name not in world_spaces:
+        print(f"A* 錯誤: 起始或目標空間不存在於 world_spaces 中。起始: {start_space_name}, 目標: {goal_space_name}") # Debugging
+        return None
+    if start_space_name == goal_space_name:
+        return [start_space_name]
+
+    start_space = world_spaces[start_space_name]
+    goal_space = world_spaces[goal_space_name]
+
+    def get_space_center(space_obj: "Space") -> Tuple[float, float]:
+        if not hasattr(space_obj, 'display_pos') or not hasattr(space_obj, 'display_size') or \
+           space_obj.display_pos is None or space_obj.display_size is None:
+            # print(f"警告: 空間 {getattr(space_obj, 'name', '未知')} 缺少 display_pos 或 display_size 或其值為None。") # Debugging
+            return (0.0, 0.0)
+        return (
+            float(space_obj.display_pos[0] + space_obj.display_size[0] / 2),
+            float(space_obj.display_pos[1] + space_obj.display_size[1] / 2)
+        )
+
+    open_set = []
+    heapq.heappush(open_set, (0, start_space_name))
+
+    came_from = {}
+    g_score = {name: float('inf') for name in world_spaces}
+    if start_space_name in g_score: # 防禦性檢查
+        g_score[start_space_name] = 0
+    else:
+        # print(f"A* 內部錯誤: start_space_name '{start_space_name}' 不在 g_score 字典中。") # Debugging
+        return None # 或者其他錯誤處理
+        
+    f_score = {name: float('inf') for name in world_spaces}
+    if start_space_name in f_score: # 防禦性檢查
+        f_score[start_space_name] = heuristic(get_space_center(start_space), get_space_center(goal_space))
+    else:
+        # print(f"A* 內部錯誤: start_space_name '{start_space_name}' 不在 f_score 字典中。") # Debugging
+        return None # 或者其他錯誤處理
+
+    processed_nodes_count = 0
+    while open_set:
+        processed_nodes_count += 1
+        if processed_nodes_count > len(world_spaces) * 10: 
+            # print(f"A* 警告: 處理節點過多 ({processed_nodes_count})，可能存在迴圈或無法到達的目標 ({start_space_name} -> {goal_space_name})。") # Debugging
+            return None
+
+        _, current_name = heapq.heappop(open_set)
+
+        if current_name == goal_space_name:
+            path = []
+            temp_name = current_name
+            while temp_name in came_from:
+                path.append(temp_name)
+                temp_name = came_from[temp_name]
+            path.append(start_space_name)
+            return path[::-1]
+
+        current_space_obj = world_spaces.get(current_name)
+        if not current_space_obj:
+            continue
+        current_center = get_space_center(current_space_obj)
+
+        if not hasattr(current_space_obj, 'connected_spaces') or current_space_obj.connected_spaces is None:
+            continue
+
+        for neighbor_space_obj in current_space_obj.connected_spaces:
+            if not hasattr(neighbor_space_obj, 'name') or neighbor_space_obj.name not in world_spaces or \
+               neighbor_space_obj.name is None: # 確保 neighbor_space_obj.name 不是 None
+                continue 
+
+            neighbor_name = neighbor_space_obj.name
+            neighbor_center = get_space_center(neighbor_space_obj)
+            
+            # 確保 g_score[current_name] 不是 inf，如果是，則跳過 (表示 current_name 從未被正確處理)
+            if g_score.get(current_name, float('inf')) == float('inf'):
+                # print(f"A* Debug: Skipping neighbor {neighbor_name} of {current_name} because g_score of current is inf.") # Debugging
+                continue
+            
+            cost_to_neighbor = heuristic(current_center, neighbor_center)
+            if cost_to_neighbor <= 0: cost_to_neighbor = 1.0
+
+            tentative_g_score = g_score.get(current_name, float('inf')) + cost_to_neighbor
+
+            if tentative_g_score < g_score.get(neighbor_name, float('inf')):
+                came_from[neighbor_name] = current_name
+                g_score[neighbor_name] = tentative_g_score
+                f_score[neighbor_name] = tentative_g_score + heuristic(neighbor_center, get_space_center(goal_space))
+                heapq.heappush(open_set, (f_score[neighbor_name], neighbor_name))
+    
+    # print(f"A* 警告: 從 {start_space_name} 到 {goal_space_name} 找不到路徑。") # Debugging
+    return None
+
 class NPC(BaseModel):
     name: str
     description: str
@@ -188,14 +300,28 @@ class NPC(BaseModel):
     first_tick: bool = True
     display_color: Optional[Tuple[int, int, int]] = None
     radius: Optional[int] = None
-    position: Optional[List[int]] = None  # 改為列表而不是元組
-    display_pos: Optional[List[int]] = None  # 改為列表而不是元組
-    move_target: Optional[List[int]] = None  # 改為列表而不是元組
-    move_speed: Optional[int] = None
+    position: Optional[List[float]] = None
+    display_pos: Optional[List[int]] = None
+    move_target: Optional[List[float]] = None
+    move_speed: Optional[float] = 1.0
     waiting_interaction: Optional[Dict[str, Any]] = None
-    is_thinking: bool = False  # 新增：標記NPC是否正在思考
-    thinking_status: str = ""  # 新增：儲存NPC最近的思考內容
-    action_status: str = ""    # 新增：儲存NPC最近的行動內容
+    is_thinking: bool = False
+    thinking_status: str = ""
+    action_status: str = ""
+
+    path_to_follow: List[str] = Field(default_factory=list)
+    current_path_segment_target_space_name: Optional[str] = None
+    home_space_name: Optional[str] = None
+
+    # 新增用於避讓物品的欄位
+    original_move_target: Optional[List[float]] = None
+    avoiding_item_name: Optional[str] = None # 假設用物品名稱作為ID
+
+    # ForwardRef必須在模型定義之後更新
+    # Space.model_rebuild() # 這行通常在所有模型定義後執行
+    # Inventory.model_rebuild()
+
+    @classmethod
 
     # Initial schema definitions
     class EnterSpaceAction(BaseModel):
@@ -303,35 +429,83 @@ class NPC(BaseModel):
 
     def move_to_space(self, target_space_name: str) -> str:
         """
-        將 NPC 移動到連接的空間，並更新空間的 NPC 列表。
+        使用 A* 演算法規劃路徑並開始移動到目標空間。
+        更新 NPC 的 path_to_follow 和 current_path_segment_target_space_name。
         """
-        target_space_name = target_space_name.lower()
+        target_space_name_lower = target_space_name.lower()
 
-        # Check if the target space is in the connected spaces of the current space
-        for connected_space in self.current_space.connected_spaces:
-            if connected_space.name.lower() == target_space_name:
-                # Remove the NPC from the current space's NPC list
-                if self in self.current_space.npcs:
-                    self.current_space.npcs.remove(self)
+        if not hasattr(self, 'current_space') or not self.current_space or \
+           not hasattr(self.current_space, 'name') or not self.current_space.name:
+            self.path_to_follow = []
+            if hasattr(self, 'current_path_segment_target_space_name'): # 確保屬性存在
+                self.current_path_segment_target_space_name = None
+            return f"錯誤: NPC {self.name} 沒有有效的 current_space 或 current_space.name，無法規劃路徑。"
 
-                # Add the NPC to the target space's NPC list
-                connected_space.npcs.append(self)
+        current_space_name_lower = self.current_space.name.lower()
 
-                # Move to the target space
-                self.current_space = connected_space
+        if current_space_name_lower == target_space_name_lower:
+            self.path_to_follow = []
+            if hasattr(self, 'current_path_segment_target_space_name'):
+                self.current_path_segment_target_space_name = None
+            return f"{self.name} 已經在 {target_space_name}。"
 
-                # 設定動畫移動目標為空間中心位置
-                center_x = connected_space.display_pos[0] + connected_space.display_size[0] // 2
-                center_y = connected_space.display_pos[1] + connected_space.display_size[1] // 2
-                self.move_target = [center_x, center_y]  # 使用列表而不是元組
-                self.move_speed = 5  # 可自訂移動速度
+        global world_system
+        if world_system is None or not hasattr(world_system, 'world') or 'spaces' not in world_system.world:
+            self.path_to_follow = []
+            if hasattr(self, 'current_path_segment_target_space_name'):
+                self.current_path_segment_target_space_name = None
+            return "錯誤: world_system 或其 world_spaces 未初始化，無法規劃路徑。"
+        
+        all_world_spaces = world_system.world.get('spaces')
+        if not all_world_spaces:
+            self.path_to_follow = []
+            if hasattr(self, 'current_path_segment_target_space_name'):
+                self.current_path_segment_target_space_name = None
+            return "錯誤: world_system.world 中缺少 'spaces' 字典，無法規劃路徑。"
 
-                # Add the target space's information to history
-                self.add_space_to_history()
+        # 先用精確的目標空間名稱搜索
+        exact_target_space_name = None
+        for space_name in all_world_spaces.keys():
+            if space_name.lower() == target_space_name_lower:
+                exact_target_space_name = space_name
+                break
+                
+        # 如果找不到精確匹配，使用原始參數
+        final_target_name = exact_target_space_name if exact_target_space_name else target_space_name
 
-                return f"移動到{connected_space.name}空間"
+        print(f"DEBUG: move_to_space - 從 {self.current_space.name} 尋找路徑前往 {final_target_name}")
+        path = find_path_astar(
+            all_world_spaces,
+            self.current_space.name, 
+            final_target_name
+        )
 
-        return f"無法找到連接的空間：{target_space_name}"
+        if path and len(path) > 1:
+            self.path_to_follow = path[1:]  # 排除當前空間
+            
+            # 確保第一個目標段落被設置
+            if self.path_to_follow:
+                self.current_path_segment_target_space_name = self.path_to_follow.pop(0)
+                print(f"DEBUG: move_to_space - 找到路徑: {path}. 設置目標段落: {self.current_path_segment_target_space_name}")
+                self.thinking_status = f"正在透過 A* 路徑前往 {final_target_name}。下一站: {self.current_path_segment_target_space_name}"
+                return f"開始 A* 路徑前往 {final_target_name}。下一站: {self.current_path_segment_target_space_name}"
+            else: 
+                # 路徑只有 [current, target]，所以 path[1:] 就是 [target]，pop 後 path_to_follow 為空
+                self.current_path_segment_target_space_name = final_target_name  # 直接設置為目標
+                print(f"DEBUG: move_to_space - 找到直接路徑: {path}. 設置目標段落: {self.current_path_segment_target_space_name}")
+                self.thinking_status = f"正在直接前往鄰近的 {final_target_name}"
+                return f"開始 (單步) 路徑前往 {final_target_name}."
+        elif path and len(path) == 1: 
+            self.path_to_follow = []
+            if hasattr(self, 'current_path_segment_target_space_name'):
+                self.current_path_segment_target_space_name = None
+            return f"{self.name} 已經在 {final_target_name} (A* 確認)。"
+        else:
+            print(f"DEBUG: move_to_space - 找不到從 {self.current_space.name} 到 {final_target_name} 的路徑")
+            self.path_to_follow = []
+            if hasattr(self, 'current_path_segment_target_space_name'):
+                self.current_path_segment_target_space_name = None
+            return f"找不到從 {self.current_space.name} 到 {final_target_name} 的 A* 路徑。"
 
     def move_to_item(self, item_name: str) -> str:
         """
@@ -645,14 +819,17 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
                 current_space = starting_space,
                 inventory = inventory,
                 history = npc_data.get("history", []),
-                display_pos = npc_data.get("display_pos", list(npc_pos)),
-                position = npc_data.get("position", list(npc_pos)),
-                move_target = npc_data.get("move_target", None),
-                move_speed = npc_data.get("move_speed", 2),
+                display_pos = npc_data.get("display_pos", list(npc_pos)), # display_pos 通常是整數像素座標
+                position = [float(p) for p in npc_data.get("position", npc_pos)], # 確保 position 是 float 列表
+                move_target = [float(p) for p in npc_data.get("move_target")] if npc_data.get("move_target") else None, # 確保 move_target 是 float 列表
+                move_speed = float(npc_data.get("move_speed", 1.0)), # 確保 move_speed 是 float
                 display_color = npc_data.get("display_color", None),
                 radius = npc_data.get("radius", 15),
                 is_thinking = npc_data.get("is_thinking", False),
-                first_tick = npc_data.get("first_tick", True)
+                first_tick = npc_data.get("first_tick", True),
+                home_space_name = npc_data.get("home_space_name"), # 新增讀取 home_space_name
+                original_move_target = [float(p) for p in npc_data.get("move_target")] if npc_data.get("move_target") else None, # 確保 original_move_target 是 float 列表
+                avoiding_item_name = npc_data.get("avoiding_item_name") # 新增讀取 avoiding_item_name
             )
 
             # 將 NPC 添加到其起始空間
@@ -845,7 +1022,10 @@ def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
                 "display_color": npc.display_color,  # 保存 NPC 的顯示顏色
                 "radius": npc.radius,  # 保存 NPC 的半徑
                 "is_thinking": npc.is_thinking,  # 保存 NPC 是否正在思考
-                "first_tick": npc.first_tick  # 保存 NPC 是否是第一次 tick
+                "first_tick": npc.first_tick,  # 保存 NPC 是否是第一次 tick
+                "home_space_name": npc.home_space_name,  # 新增保存 home_space_name
+                "original_move_target": npc.original_move_target,  # 新增保存 original_move_target
+                "avoiding_item_name": npc.avoiding_item_name  # 新增保存 avoiding_item_name
             }
             world_data["npcs"].append(npc_data)
 

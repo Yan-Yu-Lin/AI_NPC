@@ -22,7 +22,7 @@
       "space_positions":[276, 453],
       "space_size":[239, 305],
       "description": "一個優雅的客廳，陽光透過高大的窗戶灑落，使華麗的音樂盒閃閃發光。一面美麗的鏡子立在角落，為房間增添深度。",
-      "connected_spaces": [],
+      "connected_spaces": ["living_room"],
       "items": [
         
       ],
@@ -73,7 +73,7 @@
       "space_positions":[854, 8],
       "space_size":[270, 230],
       "description": "一個整潔的浴室，白色瓷磚和明亮的燈光創造了清潔的氛圍。",
-      "connected_spaces": ["corridor"],
+      "connected_spaces": ["corridor2"],
       "items": [
         "bathtub",
         "shower"
@@ -85,7 +85,7 @@
       "space_positions":[970, 246],
       "space_size":[155, 184],
       "description": "一個簡單的衛生間，白色瓷磚和明亮的燈光創造了清潔的氛圍。",
-      "connected_spaces": ["corridor"],
+      "connected_spaces": ["corridor2"],
       "items": [
         "tissue",
         "toilet"
@@ -113,7 +113,7 @@
       "space_positions":[854, 246],
       "space_size":[108, 184],
       "description": "一個長長的走廊，白色牆壁和明亮的燈光創造了明亮的氛圍。",
-      "connected_spaces": [],
+      "connected_spaces": ["corridor","bathroom","toilet"],
       "items": [],
       "npcs": []
     },
@@ -123,7 +123,7 @@
       "space_size":[270, 320],
       "description": "一個寬敞的陽台，綠意盎然的植物和明亮的燈光創造了舒適的氛圍。",
       "connected_spaces": [
-        "corridor"
+        "corridor2"
       ],
       "items": [],
       "npcs": []
@@ -545,7 +545,7 @@
     {
       "name": "alex",
       "description": "你是一個膽小的廚師助理，對廚藝有著深厚的了解。",
-      "starting_space": "study",
+      "starting_space": "corridor",
       "inventory": [],
       "history": [
         {

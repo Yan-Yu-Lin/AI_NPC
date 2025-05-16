@@ -1,6 +1,6 @@
 import pygame
 import threading
-import math
+import math # 加入 math 模組以使用 math.hypot
 import os
 import time
 from backend import save_world_to_json
@@ -87,42 +87,6 @@ def load_item_image(image_path):
     except Exception as e:
         print(f"載入圖片失敗 {primary_path} (even after attempting generation): {e}")
 
-    # 如果主要路徑失敗 (即使在嘗試生成後)，嘗試備用位置
-    # 這部分備用路徑的邏輯可能需要重新評估，因為主要目的是生成到 standard path
-    # 但為了保持原有的 robustness，暫時保留
-    backup_paths = [
-        image_path, # 例如，如果 image_path 本身就是完整路徑
-        os.path.join("images", image_path),
-        os.path.join("worlds", "images", image_path)
-    ]
-
-    for path_idx, path in enumerate(backup_paths):
-        try:
-            if os.path.exists(path):
-                # print(f"Loading from backup path {path_idx+1}: {path}") # Debugging line
-                image = pygame.image.load(path).convert_alpha()
-                item_image_cache[image_path] = image
-                # 考慮是否要將備用路徑找到的圖片複製到主要路徑
-                # try:
-                #     import shutil
-                #     os.makedirs(os.path.dirname(primary_path), exist_ok=True)
-                #     shutil.copy(path, primary_path)
-                #     print(f"圖片已從備用位置複製到標準位置: {primary_path}")
-                # except Exception as copy_e:
-                #     print(f"複製備用圖片到主要位置失敗: {copy_e}")
-                return image
-        except Exception as e_backup:
-            # print(f"Failed to load from backup {path}: {e_backup}") # Debugging line
-            continue
-
-    # print(f"All loading attempts failed for {image_path}, using placeholder.") # Debugging line
-    # 找不到圖片時使用占位圖
-    placeholder = pygame.Surface((40, 40), pygame.SRCALPHA)
-    placeholder.fill((150, 150, 200, 180))
-    pygame.draw.rect(placeholder, (80, 80, 120), placeholder.get_rect(), 2)
-    item_image_cache[image_path] = placeholder
-    return placeholder
-
 def calculate_adaptive_scale(image, target_size=100):
     """根據圖片大小計算合適的縮放比例"""
     # 獲取原始尺寸
@@ -204,6 +168,14 @@ def run_pygame_demo(world):
     min_zoom = 0.2
     max_zoom = 5.0
 
+    # 新增：顯示碰撞區域的開關
+    show_collision_areas = True  # 設置為 True 以默認顯示碰撞區域
+    
+    # 碰撞區域顏色設置
+    SPACE_COLLISION_COLOR = (255, 100, 100, 128)  # 紅色半透明
+    ITEM_COLLISION_COLOR = (100, 255, 100, 128)   # 綠色半透明
+    NPC_COLLISION_COLOR = (100, 100, 255, 128)    # 藍色半透明
+
     # 功能說明
     info_lines = []
 
@@ -214,13 +186,23 @@ def run_pygame_demo(world):
         ("p", "打印歷史"),
         ("s", "存檔"),
         ("n", "切換NPC"),
-        ("w", "改變天氣和時間")
+        ("w", "改變天氣和時間"),
+        ("k", "碰撞顯示")  # 新增：切換碰撞區域顯示
     ]
 
     # 取得物件參考
     spaces = list(world["spaces"].values())
     npcs = list(world["npcs"].values())
     items = list(world["items"].values())
+    all_spaces_dict = world["spaces"] # A* 需要空間字典
+
+    # 增加 NPC 移動速度
+    for npc in npcs:
+        # 設置更快的默認移動速度
+        if hasattr(npc, 'move_speed'):
+            original_speed = npc.move_speed
+            npc.move_speed = 5.0 if original_speed <= 5.0 else original_speed
+            print(f"DEBUG: 將 NPC {npc.name} 的移動速度從 {original_speed} 調整為 {npc.move_speed}")
 
     # 不再需要 map_data，直接用物件屬性
     # 計算原始地圖最大寬高（用於縮放）
@@ -232,6 +214,28 @@ def run_pygame_demo(world):
     for idx, npc in enumerate(npcs):
         npc.display_color = npc_colors[idx % len(npc_colors)]
         npc.radius = 24
+        # A* 路徑相關屬性初始化
+        npc.path_to_follow = [] # 確保 NPC 物件有此屬性 (已在 backend.py 中定義)
+        npc.current_path_segment_target_space_name = None # 確保 NPC 物件有此屬性
+        
+        # npc.current_space 應該由 backend.py 中的 build_world_from_data 設定
+        # 我們在這裡檢查它是否存在，並給出警告（如果需要）
+        if not hasattr(npc, 'current_space') or npc.current_space is None:
+            print(f"警告: NPC {npc.name} 沒有有效的 current_space。A* 路徑規劃可能會有問題。")
+        elif not hasattr(npc.current_space, 'name'):
+            print(f"警告: NPC {npc.name} 的 current_space 物件沒有 name 屬性。")
+
+        # position 屬性也應該由 backend 設定好
+        if not hasattr(npc, 'position') or npc.position is None:
+            default_initial_pos = [0.0, 0.0]
+            if hasattr(npc, 'current_space') and npc.current_space and \
+               hasattr(npc.current_space, 'display_pos') and hasattr(npc.current_space, 'display_size'):
+                default_initial_pos = [
+                    float(npc.current_space.display_pos[0] + npc.current_space.display_size[0] / 2),
+                    float(npc.current_space.display_pos[1] + npc.current_space.display_size[1] / 2)
+                ]
+            npc.position = default_initial_pos
+            print(f"警告: NPC {npc.name} 沒有初始位置，已根據其 current_space (如果存在) 或 (0,0) 設定為 {npc.position}")
 
     active_npc = npcs[0] if npcs else None  # 預設主控第一個 NPC
     # 在初始化時輸出目前關注的NPC
@@ -239,6 +243,19 @@ def run_pygame_demo(world):
         print(f"========= 目前關注的NPC: {active_npc.name} ==========")
     else:
         print("========= 目前沒有可用的NPC ===========")
+
+    # 新增：牆壁和連接相關常數 (使用世界單位，會進行縮放)
+    WALL_COLOR = (70, 70, 70)  # 深灰色牆壁
+    WALL_THICKNESS_WORLD_UNITS = 2.0  # 牆壁厚度 (世界座標系)
+    CONNECTION_TOLERANCE_WORLD_UNITS = 20.0  # 空間邊緣對齊的容差 (世界座標系)
+    # MIN_PATH_WIDTH_WORLD_UNITS = 20.0     # 形成路徑所需的最小重疊寬度 (世界座標系) # 註解掉，門的邏輯使用固定寬度
+    
+    # 新增：門的相關常數
+    DOOR_WIDTH_WORLD_UNITS = 80.0  # 門的寬度/高度 (開口大小)，世界座標系
+    DOOR_COLOR = (139, 69, 19, 180)   # 門的顏色 (棕色，半透明)
+    DOOR_FRAME_THICKNESS_WORLD_UNITS = 20.0 # 門框厚度
+    DOOR_FRAME_COLOR = (90, 45, 10) # 深棕色門框
+
     last_ai_result = ""
     ai_thinking = False
     ai_threading = None
@@ -250,7 +267,7 @@ def run_pygame_demo(world):
         
         # 如果已經在執行，則不啟動新的 (額外的保護)
         if ai_running:
-            print("AI process already running, skipping new request.")
+            print("DEBUG: ai_process - AI process already running, skipping new request.") # MODIFIED
             return
 
         ai_running = True
@@ -260,7 +277,7 @@ def run_pygame_demo(world):
         npc_threads.clear()
         
         active_threads_this_batch = [] # 儲存當前批次啟動的執行緒
-        print("Starting AI processing for NPCs...")
+        print("DEBUG: ai_process - Starting batch AI processing for NPCs...") # MODIFIED
         for i, npc_obj in enumerate(npcs): # 使用 npc_obj 避免與外層 npc 變數混淆
                 npc_obj.is_thinking = True
                 npc_obj.thinking_status = f"{npc_obj.name} 處理中..."
@@ -268,30 +285,38 @@ def run_pygame_demo(world):
                 def process_single_npc(npc_id, single_npc_ref):
                     try:
                         this_npc_name = single_npc_ref.name
-                        print(f"執行緒 {npc_id}: 開始處理 {this_npc_name}...")
+                        print(f"DEBUG: process_single_npc (Thread {npc_id}, {this_npc_name}) - Starting process_tick()...") # MODIFIED
                         result = single_npc_ref.process_tick()
-                        single_npc_ref.thinking_status = f"{this_npc_name}: {result[:50]}" + ("..." if len(result) > 50 else "")
-                        print(f"執行緒 {npc_id}: 完成處理 {this_npc_name}: {result[:30]}...")
+                        print(f"DEBUG: process_single_npc (Thread {npc_id}, {this_npc_name}) - process_tick() completed. Result: {str(result)[:50]}...") # MODIFIED
+                        single_npc_ref.thinking_status = f"{this_npc_name}: {str(result)[:50]}" + ("..." if len(str(result)) > 50 else "") # MODIFIED (added str())
+                        # print(f"執行緒 {npc_id}: 完成處理 {this_npc_name}: {result[:30]}...")
                     except Exception as e_single:
-                        print(f"執行緒 {npc_id}: 處理 {single_npc_ref.name} 失敗: {str(e_single)}")
+                        print(f"DEBUG: process_single_npc (Thread {npc_id}, {single_npc_ref.name}) - ERROR in process_tick(): {str(e_single)}") # MODIFIED
                         single_npc_ref.thinking_status = f"{single_npc_ref.name}: 處理失敗"
                     finally:
                         single_npc_ref.is_thinking = False # 確保 thinking 狀態被重置
+                        print(f"DEBUG: process_single_npc (Thread {npc_id}, {single_npc_ref.name}) - Finished thread execution.") # MODIFIED
                 
                 t = threading.Thread(target=process_single_npc, args=(i, npc_obj))
                 t.daemon = True
                 active_threads_this_batch.append(t)
                 t.start()
-                print(f"已啟動執行緒 {i} 用於處理 {npc_obj.name}")
+                print(f"DEBUG: ai_process - Launched thread {i} for {npc_obj.name}") # MODIFIED
         
         # 等待當前批次的所有NPC思考執行緒完成
-        print("Waiting for all NPC thinking processes to complete...")
-        for t_join in active_threads_this_batch:
+        print("DEBUG: ai_process - All NPC thinking threads launched. Waiting for completion...") # MODIFIED
+        for t_idx, t_join in enumerate(active_threads_this_batch): # MODIFIED to add t_idx
+            npc_name_for_join = "UnknownNPC"
+            if t_idx < len(npcs): # Check index bounds
+                npc_name_for_join = npcs[t_idx].name
+            print(f"DEBUG: ai_process - Attempting to join thread {t_idx} for {npc_name_for_join}...") # MODIFIED
             t_join.join() # 等待每個執行緒執行完畢
-        print("All NPC thinking processes (process_tick) completed.")
+            print(f"DEBUG: ai_process - Successfully joined thread {t_idx} for {npc_name_for_join}.") # MODIFIED
+        print("DEBUG: ai_process - All NPC thinking processes (process_tick) completed and threads joined.") # MODIFIED
         
         ai_thinking = False
         ai_running = False # AI 思考和 tick 處理階段結束
+        print("DEBUG: ai_process - Batch AI processing finished. ai_running set to False.") # MODIFIED
         
     def save_menu(screen, font, world, original_path):
         menu_items = ["直接存檔", "另存新檔", "取消"]
@@ -988,6 +1013,24 @@ def run_pygame_demo(world):
                         last_ai_result = ""  # 清空上一個NPC的AI結果
                         # 輸出目前關注的NPC
                         print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+                # 新增：K鍵切換碰撞區域顯示
+                elif event.key == pygame.K_k:
+                    show_collision_areas = not show_collision_areas
+                    print(f"{'顯示' if show_collision_areas else '隱藏'}碰撞區域")
+                elif event.key == pygame.K_w:
+                    # 新增功能：處理「改變天氣和時間」按鈕
+                    print(f"當前時間: {world_system.time}")
+                    print(f"當前天氣: {world_system.weather}")
+
+                    new_time = input("輸入新的時間 (直接按 Enter 保持不變): ").strip()
+                    if new_time:
+                        world_system.time = new_time
+
+                    new_weather = input("輸入新的天氣 (直接按 Enter 保持不變): ").strip()
+                    if new_weather:
+                        world_system.weather = new_weather
+
+                    print(f"更新後 - 時間: {world_system.time}, 天氣: {world_system.weather}")
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 win_w, win_h = screen.get_size()
                 button_w, button_h = 120, 44
@@ -1044,6 +1087,11 @@ def run_pygame_demo(world):
                                 last_ai_result = ""  # 清空上一個NPC的AI結果
                                 # 輸出目前關注的NPC
                                 print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+                        # 新增：處理「k」按鈕的功能
+                        if key_char == "k":
+                            # 切換顯示碰撞區域
+                            show_collision_areas = not show_collision_areas
+                            print(f"{'顯示' if show_collision_areas else '隱藏'}碰撞區域")
             elif event.type == pygame.MOUSEWHEEL: # 處理滑鼠滾輪事件
                 if event.y > 0: # 向上滾動，放大
                     current_zoom_level += zoom_speed
@@ -1052,48 +1100,552 @@ def run_pygame_demo(world):
                 current_zoom_level = max(min_zoom, min(current_zoom_level, max_zoom)) # 限制縮放範圍
 
         # 每次主循環都同步 display_pos 與 position，並推進動畫移動
+        # 在 NPC 移動更新之前，確保 calculated_doors 是最新的
+        # --- 預先計算門的位置 (整合 TypeError 修復) --- (這段邏輯移到 NPC 移動更新之前，以確保 A* 可以使用最新的門信息)
+        calculated_doors = [] # 儲存計算出的門的資訊
+        space_map_for_doors = {s.name: s for s in spaces} # 空間名稱到物件的映射 (避免與全域 space_map 衝突)
+        processed_space_pairs_for_doors = set() # 避免重複處理空間對
+
+        for s1 in spaces:
+            if not hasattr(s1, "connected_spaces") or not s1.connected_spaces or not hasattr(s1, "display_pos") or not hasattr(s1, "display_size") :
+                continue
+            for connected_item in s1.connected_spaces: # connected_item 可能是字串或 Space 物件
+                s2_name = None
+                if isinstance(connected_item, str): # 假設是字串
+                    s2_name = connected_item    # 直接使用字串
+                elif hasattr(connected_item, 'name'): # 假設是 Space 物件
+                    s2_name = connected_item.name # 使用 Space 物件的 name 屬性
+                else:
+                    continue
+                
+                s2 = space_map_for_doors.get(s2_name)
+                if not s2 or s1 == s2 or not hasattr(s2, "display_pos") or not hasattr(s2, "display_size"): # s2 不存在或 s2 就是 s1 自己，或s2缺少位置資訊
+                    continue
+
+                pair_key = tuple(sorted((s1.name, s2.name))) # 將空間名稱組成一個唯一的鍵
+                if pair_key in processed_space_pairs_for_doors:
+                    continue
+                
+                s1_rect_world = pygame.Rect(s1.display_pos[0], s1.display_pos[1], s1.display_size[0], s1.display_size[1])
+                s2_rect_world = pygame.Rect(s2.display_pos[0], s2.display_pos[1], s2.display_size[0], s2.display_size[1])
+                door_info = None
+                
+                # 檢查 s1 的右邊緣是否連接 s2 的左邊緣
+                if abs(s1_rect_world.right - s2_rect_world.left) < CONNECTION_TOLERANCE_WORLD_UNITS:
+                    overlap_y_start = max(s1_rect_world.top, s2_rect_world.top)
+                    overlap_y_end = min(s1_rect_world.bottom, s2_rect_world.bottom)
+                    if overlap_y_end - overlap_y_start >= DOOR_WIDTH_WORLD_UNITS:   # 門的寬度/高度 (開口大小)，世界座標系
+                        door_center_y = (overlap_y_start + overlap_y_end) / 2
+                        door_info = {
+                            "s1_name": s1.name, "s2_name": s2.name, "type": "vertical",
+                            "wall_x_world": s1_rect_world.right, 
+                            "opening_start_world": door_center_y - DOOR_WIDTH_WORLD_UNITS / 2, 
+                            "opening_end_world": door_center_y + DOOR_WIDTH_WORLD_UNITS / 2,   
+                            "s1_edge_name": "right", "s2_edge_name": "left"
+                        }
+                # 檢查 s1 的左邊緣是否連接 s2 的右邊緣
+                elif abs(s1_rect_world.left - s2_rect_world.right) < CONNECTION_TOLERANCE_WORLD_UNITS:
+                    overlap_y_start = max(s1_rect_world.top, s2_rect_world.top)
+                    overlap_y_end = min(s1_rect_world.bottom, s2_rect_world.bottom)
+                    if overlap_y_end - overlap_y_start >= DOOR_WIDTH_WORLD_UNITS:
+                        door_center_y = (overlap_y_start + overlap_y_end) / 2
+                        door_info = {
+                            "s1_name": s1.name, "s2_name": s2.name, "type": "vertical",
+                            "wall_x_world": s1_rect_world.left,
+                            "opening_start_world": door_center_y - DOOR_WIDTH_WORLD_UNITS / 2,
+                            "opening_end_world": door_center_y + DOOR_WIDTH_WORLD_UNITS / 2,
+                            "s1_edge_name": "left", "s2_edge_name": "right"
+                        }
+                # 檢查 s1 的下邊緣是否連接 s2 的上邊緣
+                elif abs(s1_rect_world.bottom - s2_rect_world.top) < CONNECTION_TOLERANCE_WORLD_UNITS:
+                    overlap_x_start = max(s1_rect_world.left, s2_rect_world.left)
+                    overlap_x_end = min(s1_rect_world.right, s2_rect_world.right)
+                    if overlap_x_end - overlap_x_start >= DOOR_WIDTH_WORLD_UNITS:
+                        door_center_x = (overlap_x_start + overlap_x_end) / 2
+                        door_info = {
+                            "s1_name": s1.name, "s2_name": s2.name, "type": "horizontal",
+                            "wall_y_world": s1_rect_world.bottom, 
+                            "opening_start_world": door_center_x - DOOR_WIDTH_WORLD_UNITS / 2, 
+                            "opening_end_world": door_center_x + DOOR_WIDTH_WORLD_UNITS / 2,   
+                            "s1_edge_name": "bottom", "s2_edge_name": "top"
+                        }
+                # 檢查 s1 的上邊緣是否連接 s2 的下邊緣
+                elif abs(s1_rect_world.top - s2_rect_world.bottom) < CONNECTION_TOLERANCE_WORLD_UNITS:
+                    overlap_x_start = max(s1_rect_world.left, s2_rect_world.left)
+                    overlap_x_end = min(s1_rect_world.right, s2_rect_world.right)
+                    if overlap_x_end - overlap_x_start >= DOOR_WIDTH_WORLD_UNITS:
+                        door_center_x = (overlap_x_start + overlap_x_end) / 2
+                        door_info = {
+                            "s1_name": s1.name, "s2_name": s2.name, "type": "horizontal",
+                            "wall_y_world": s1_rect_world.top,
+                            "opening_start_world": door_center_x - DOOR_WIDTH_WORLD_UNITS / 2,
+                            "opening_end_world": door_center_x + DOOR_WIDTH_WORLD_UNITS / 2,
+                            "s1_edge_name": "top", "s2_edge_name": "bottom"
+                        }
+                
+                if door_info:
+                    calculated_doors.append(door_info)
+                    processed_space_pairs_for_doors.add(pair_key)
+        # --- 預計算門結束 --- (calculated_doors 現在在此處更新)
+
         for npc in npcs:
             # 確保 npc.position 是浮點數列表以進行精確移動
-            if npc.position is None:
-                npc.position = [0.0, 0.0] 
+            if npc.position is None: 
+                npc.position = [0.0, 0.0] # 應該已在初始化處理，但再次檢查
             else:
                 npc.position = [float(p) for p in npc.position]
 
+            # 更新 NPC 目前所在的空間 (A* 需要)
+            # npc.current_world_space_name = get_npc_current_space(npc, all_spaces_dict) # 不再需要，直接使用 npc.current_space.name
+            current_npc_space_name = npc.current_space.name if hasattr(npc, 'current_space') and npc.current_space and hasattr(npc.current_space, 'name') else None
+
+            # --- A* 路徑跟隨邏輯 (修改後) ---
+            if hasattr(npc, 'current_path_segment_target_space_name') and npc.current_path_segment_target_space_name:
+                target_segment_space_name = npc.current_path_segment_target_space_name
+                target_space_obj = all_spaces_dict.get(target_segment_space_name)
+                current_npc_actual_space = npc.current_space # This is updated each frame based on physical position
+
+                if target_space_obj and current_npc_actual_space and hasattr(current_npc_actual_space, 'name'):
+                    if current_npc_actual_space.name != target_segment_space_name:
+                        # NPC 尚未進入目標路徑片段的空間。尋找通往該空間的門。
+                        entry_door_to_target = None
+                        for door_candidate in calculated_doors: # 確保 calculated_doors 是最新的
+                            if ((door_candidate.get('s1_name') == current_npc_actual_space.name and door_candidate.get('s2_name') == target_segment_space_name) or
+                                (door_candidate.get('s2_name') == current_npc_actual_space.name and door_candidate.get('s1_name') == target_segment_space_name)):
+                                entry_door_to_target = door_candidate
+                                break
+                        
+                        if entry_door_to_target:
+                            # 將目標設定為已識別門的開口中心
+                            door_center_x, door_center_y = 0.0, 0.0
+                            if entry_door_to_target['type'] == 'vertical':
+                                door_center_x = float(entry_door_to_target['wall_x_world'])
+                                door_center_y = float((entry_door_to_target['opening_start_world'] + entry_door_to_target['opening_end_world']) / 2)
+                            elif entry_door_to_target['type'] == 'horizontal':
+                                door_center_x = float((entry_door_to_target['opening_start_world'] + entry_door_to_target['opening_end_world']) / 2)
+                                door_center_y = float(entry_door_to_target['wall_y_world'])
+                            
+                            # --- NEW NUDGE LOGIC ---
+                            nudge_amount = 15.0 # 增加偏移量，從 1.0 改為 15.0，確保 NPC 真正進入目標空間
+                            final_target_x, final_target_y = door_center_x, door_center_y
+
+                            current_space_name_for_nudge = current_npc_actual_space.name
+                            # target_segment_space_name 是 A* 路徑段的目標空間名稱
+
+                            # 判斷 NPC 是從 s1 到 s2，還是從 s2 到 s1，並據此決定推動方向
+                            if entry_door_to_target.get('s1_name') == current_space_name_for_nudge and \
+                               entry_door_to_target.get('s2_name') == target_segment_space_name:
+                                # NPC 從 s1 (current) 經由 s1_edge_name 進入 s2 (target_segment_space_name)
+                                s1_edge = entry_door_to_target.get('s1_edge_name')
+                                if s1_edge == 'right': final_target_x += nudge_amount
+                                elif s1_edge == 'left': final_target_x -= nudge_amount
+                                elif s1_edge == 'bottom': final_target_y += nudge_amount
+                                elif s1_edge == 'top': final_target_y -= nudge_amount
+                            elif entry_door_to_target.get('s2_name') == current_space_name_for_nudge and \
+                                 entry_door_to_target.get('s1_name') == target_segment_space_name:
+                                # NPC 從 s2 (current) 經由 s2_edge_name 進入 s1 (target_segment_space_name)
+                                s2_edge = entry_door_to_target.get('s2_edge_name')
+                                if s2_edge == 'right': final_target_x += nudge_amount
+                                elif s2_edge == 'left': final_target_x -= nudge_amount
+                                elif s2_edge == 'bottom': final_target_y += nudge_amount
+                                elif s2_edge == 'top': final_target_y -= nudge_amount
+                            else:
+                                # 這種情況理論上不應該發生，如果 entry_door_to_target 是有效的
+                                print(f"WARNING: NPC {npc.name} door nudge logic - door {entry_door_to_target} doesn't match current/target spaces: {current_space_name_for_nudge} -> {target_segment_space_name}. Using original door center.")
+
+                            npc.move_target = [final_target_x, final_target_y]
+                            print(f"DEBUG: NPC {npc.name} in {current_npc_actual_space.name} targeting NUDGED door to {target_segment_space_name} at {npc.move_target}") # MODIFIED to show it is nudged
+                        else:
+                            # 找不到直達的門（如果 A* 路徑有效且 calculated_doors 正確，則不應發生）
+                            # 退回至目標空間中心，但這可能有問題。
+                            # print(f"警告: NPC {npc.name} in {current_npc_actual_space.name} 找不到通往 {target_segment_space_name} 的門。將目標設為空間中心。") # Debug
+                            if hasattr(target_space_obj, 'display_pos') and hasattr(target_space_obj, 'display_size'):
+                                center_x = float(target_space_obj.display_pos[0] + target_space_obj.display_size[0] / 2)
+                                center_y = float(target_space_obj.display_pos[1] + target_space_obj.display_size[1] / 2)
+                                npc.move_target = [center_x, center_y]
+                            else:
+                                npc.move_target = None # 無法確定目標
+                    else:
+                        # NPC 已經在目標路徑片段的空間中 (current_npc_actual_space.name == target_segment_space_name)
+                        # NPC has just entered this segment's target space (e.g., passed through a door).
+                        # Now, its immediate goal is to move towards the center of THIS space to ensure it fully clears the doorway/entry.
+                        # The current_path_segment_target_space_name still correctly points to this space.
+                        
+                        # Get the object for the space it just entered (which is npc.current_path_segment_target_space_name)
+                        space_it_just_entered_obj = all_spaces_dict.get(npc.current_path_segment_target_space_name)
+                        if space_it_just_entered_obj and hasattr(space_it_just_entered_obj, 'display_pos') and hasattr(space_it_just_entered_obj, 'display_size'):
+                            center_x = float(space_it_just_entered_obj.display_pos[0] + space_it_just_entered_obj.display_size[0] / 2)
+                            center_y = float(space_it_just_entered_obj.display_pos[1] + space_it_just_entered_obj.display_size[1] / 2)
+                            npc.move_target = [center_x, center_y]
+                            # print(f"NPC {npc.name} entered {npc.current_path_segment_target_space_name}, now moving to its center: {npc.move_target}") # Debug
+                        else:
+                            # Fallback or error: if the space object is not found (should not happen if path is valid)
+                            # Clear path to prevent issues.
+                            # print(f"警告: NPC {npc.name} in {current_npc_actual_space.name}, A* segment {npc.current_path_segment_target_space_name} object not found. Clearing path.") # Debug
+                            npc.current_path_segment_target_space_name = None
+                            if hasattr(npc, 'path_to_follow'): npc.path_to_follow = []
+                            npc.move_target = None
+                        
+                        # IMPORTANT: npc.path_to_follow and npc.current_path_segment_target_space_name are NOT advanced here.
+                        # That will happen in the "target reached" logic (if dist < current_move_speed)
+                        # when the NPC actually reaches the center of this space.
+                else:
+                    # target_space_obj 或 current_npc_actual_space 無效，清除路徑
+                    # print(f"警告: NPC {npc.name} 的 A* 目標 {target_segment_space_name} 或目前空間無效。清除路徑。") # Debug
+                    npc.current_path_segment_target_space_name = None
+                    if hasattr(npc, 'path_to_follow'): npc.path_to_follow = []
+                    npc.move_target = None
+            # --- A* 路徑跟隨邏輯結束 ---
+
             if hasattr(npc, 'move_target') and npc.move_target:
-                target_pos = [float(tp) for tp in npc.move_target] # 確保目標位置也是浮點數
+                target_pos = [float(tp) for tp in npc.move_target] 
+
+                # 確保 npc.position 是有效的 list of floats or ints
+                if not isinstance(npc.position, list) or not all(isinstance(p, (float, int)) for p in npc.position):
+                    print(f"DEBUG: ERROR - NPC {npc.name} has invalid position: {npc.position}. Skipping move.")
+                    continue # 跳過此 NPC 的移動
 
                 dx = target_pos[0] - npc.position[0]
                 dy = target_pos[1] - npc.position[1]
                 dist = math.hypot(dx, dy)
                 
-                # 獲取移動速度，如果未定義則使用預設值 1.0
+                # DEBUG: Print NPC movement intention
+                print(f"DEBUG: NPC {npc.name} at {npc.position} wants to move to {npc.move_target}. Dist: {dist:.2f}")
+
                 current_move_speed = getattr(npc, 'move_speed', 1.0) 
-                if current_move_speed <= 0: # 避免速度為0或負數導致的問題
-                    current_move_speed = 1.0 
+                if current_move_speed <= 0: current_move_speed = 1.0 
 
                 if dist < current_move_speed:
-                    npc.position = target_pos # 到達目標
-                    npc.move_target = None
-                    # 如果NPC正在等待互動，結束互動並顯示結果
-                    if hasattr(npc, 'waiting_interaction') and \
-                       npc.waiting_interaction and \
-                       npc.waiting_interaction.get('started', False):
-                        interaction_result = npc.complete_interaction() # 假設 NPC 物件有此方法
-                        if interaction_result:
-                            last_ai_result = interaction_result 
+                    print(f"DEBUG: NPC {npc.name} attempting to reach target {target_pos}. dist < current_move_speed ({dist:.2f} < {current_move_speed:.2f})")
+                    # --- NPC 到達 move_target 的邏輯 ---
+                    npc.position[0] = target_pos[0]
+                    npc.position[1] = target_pos[1]
+                    print(f"DEBUG: NPC {npc.name} REACHED target. New position: {npc.position}. Original target was: {target_pos}")
+
+                    is_on_astar_path_and_active = hasattr(npc, 'current_path_segment_target_space_name') and npc.current_path_segment_target_space_name is not None
+                    was_avoiding_item = hasattr(npc, 'avoiding_item_name') and npc.avoiding_item_name is not None
+                    
+                    target_processed_this_tick = False # Flag to indicate if the target reached has been handled
+
+                    if was_avoiding_item:
+                        print(f"DEBUG: NPC {npc.name} reached temporary target after avoiding {npc.avoiding_item_name}. Original target was {getattr(npc, 'original_move_target', 'None')}. Clearing move_target for AI re-evaluation.")
+                        npc.move_target = None
+                        if hasattr(npc, 'original_move_target'): npc.original_move_target = None
+                        npc.avoiding_item_name = None
+                        target_processed_this_tick = True
+
+                    elif is_on_astar_path_and_active:
+                        current_segment_target_space_obj = all_spaces_dict.get(npc.current_path_segment_target_space_name)
+                        if current_segment_target_space_obj and hasattr(current_segment_target_space_obj, 'display_pos') and hasattr(current_segment_target_space_obj, 'display_size'):
+                            center_x_of_current_segment = float(current_segment_target_space_obj.display_pos[0] + current_segment_target_space_obj.display_size[0] / 2)
+                            center_y_of_current_segment = float(current_segment_target_space_obj.display_pos[1] + current_segment_target_space_obj.display_size[1] / 2)
+
+                            # Check if the reached target (target_pos) was the center of the current A* segment space
+                            if abs(target_pos[0] - center_x_of_current_segment) < 0.1 and \
+                               abs(target_pos[1] - center_y_of_current_segment) < 0.1:
+                                print(f"DEBUG: NPC {npc.name} reached CENTER of A* segment {npc.current_path_segment_target_space_name}.")
+                                if hasattr(npc, 'path_to_follow') and npc.path_to_follow:
+                                    npc.current_path_segment_target_space_name = npc.path_to_follow.pop(0)
+                                    print(f"DEBUG: NPC {npc.name} A* path advanced. Next segment: {npc.current_path_segment_target_space_name}. Clearing move_target for recalc.")
+                                else: # Reached center of the final A* destination
+                                    print(f"DEBUG: NPC {npc.name} A* path COMPLETED. Reached center of final destination {npc.current_path_segment_target_space_name}.")
+                                    npc.current_path_segment_target_space_name = None
+                                    if hasattr(npc, 'path_to_follow'): npc.path_to_follow = [] # Clear path list
+                                npc.move_target = None # Clear move_target to force top-level A* logic to pick new door/center next frame
+                                target_processed_this_tick = True
+                            else:
+                                # Reached an A* intermediate target (e.g., a door) that wasn't the space center.
+                                print(f"DEBUG: NPC {npc.name} reached A* intermediate target (e.g., door for segment {npc.current_path_segment_target_space_name}). Clearing move_target for A* logic re-evaluation.")
+                                
+                                # --- FORCE SPACE TRANSITION ---
+                                # 當 NPC 到達 nudged 門點時，強制更新其 current_space 到目標空間
+                                target_space_obj = all_spaces_dict.get(npc.current_path_segment_target_space_name)
+                                if target_space_obj:
+                                    # 1. 從舊空間的 npcs 列表中移除此 NPC
+                                    if hasattr(npc, 'current_space') and npc.current_space and hasattr(npc.current_space, 'npcs'):
+                                        if npc in npc.current_space.npcs:
+                                            npc.current_space.npcs.remove(npc)
+                                    
+                                    # 2. 將 npc.current_space 設置為目標空間
+                                    print(f"DEBUG: NPC {npc.name} FORCE UPDATING current_space from {getattr(npc.current_space, 'name', 'unknown')} to {npc.current_path_segment_target_space_name}")
+                                    npc.current_space = target_space_obj
+                                    
+                                    # 3. 將 NPC 添加到新空間的 npcs 列表
+                                    if npc not in target_space_obj.npcs:
+                                        target_space_obj.npcs.append(npc)
+                                
+                                npc.move_target = None # Clear it, so the main A* logic (next frame) sets it to current space center or next door.
+                                target_processed_this_tick = True
+                        else: 
+                            # Fallback for invalid A* segment object
+                            print(f"DEBUG: ERROR - NPC {npc.name} on A* path but current_segment_target_space_obj '{npc.current_path_segment_target_space_name}' not found/valid. Clearing path.")
+                            npc.current_path_segment_target_space_name = None
+                            if hasattr(npc, 'path_to_follow'): npc.path_to_follow = []
+                            npc.move_target = None
+                            target_processed_this_tick = True
+                    
+                    # If target wasn't processed by avoidance or A* logic, it's a general move completion.
+                    if not target_processed_this_tick:
+                        print(f"DEBUG: NPC {npc.name} reached general non-A*/non-avoidance target ({target_pos}). Clearing move_target.")
+                        npc.move_target = None
+                        # target_processed_this_tick = True # Not strictly needed to set here again
+
+                    # --- 完成互動的邏輯 (大部分未變，但要確保它能配合) ---
+                    # (已修正過的多行 if 條件)
+                    if (hasattr(npc, 'waiting_interaction') and # Ensure attribute exists
+                        npc.waiting_interaction and
+                        npc.waiting_interaction.get('started', False) and
+                        dist < current_move_speed): # Check dist again, as it might have changed if target was restored
+                        
+                        # npc.move_target is likely None now if interaction target was reached.
+                        # complete_interaction might set a new target or AI might.
+                        interaction_result = npc.complete_interaction() 
+                        if interaction_result: last_ai_result = interaction_result
                 else:
-                    # 朝目標移動
+                    # --- 正常移動及碰撞檢測邏輯 ---
+                    print(f"DEBUG: NPC {npc.name} EXECUTING move. Dist: {dist:.2f}, Speed: {current_move_speed:.2f}")
                     move_x = current_move_speed * dx / dist
                     move_y = current_move_speed * dy / dist
-                    npc.position[0] += move_x
-                    npc.position[1] += move_y
+
+                    next_x = npc.position[0] + move_x
+                    next_y = npc.position[1] + move_y
+                    
+                    npc_world_radius = npc.radius 
+                    npc_next_rect_world = pygame.Rect(
+                        next_x - npc_world_radius,
+                        next_y - npc_world_radius,
+                        2 * npc_world_radius,
+                        2 * npc_world_radius
+                    )
+                    npc_try_x_rect_world = pygame.Rect(
+                        next_x - npc_world_radius, npc.position[1] - npc_world_radius, 
+                        2 * npc_world_radius, 2 * npc_world_radius
+                    )
+                    npc_try_y_rect_world = pygame.Rect(
+                        npc.position[0] - npc_world_radius, next_y - npc_world_radius, 
+                        2 * npc_world_radius, 2 * npc_world_radius
+                    )
+
+                    can_move_x = True
+                    can_move_y = True
+
+                    current_space_obj = npc.current_space
+                    if current_space_obj and hasattr(current_space_obj, 'display_pos') and hasattr(current_space_obj, 'display_size'):
+                        current_space_rect_world = pygame.Rect(
+                            current_space_obj.display_pos[0], current_space_obj.display_pos[1],
+                            current_space_obj.display_size[0], current_space_obj.display_size[1]
+                        )
+
+                        is_moving_to_door_for_path = False
+                        if hasattr(npc, 'current_path_segment_target_space_name') and npc.current_path_segment_target_space_name:
+                            for door in calculated_doors: 
+                                if ((door.get('s1_name') == current_space_obj.name and door.get('s2_name') == npc.current_path_segment_target_space_name) or 
+                                    (door.get('s2_name') == current_space_obj.name and door.get('s1_name') == npc.current_path_segment_target_space_name)):
+                                    door_opening_rect_world = None
+                                    # wall_thickness_for_door_check = WALL_THICKNESS_WORLD_UNITS # Original
+                                    # NEW: Make the check depth for the door more generous
+                                    door_check_rect_depth = max(npc_world_radius, WALL_THICKNESS_WORLD_UNITS * 2) # Use npc radius or twice wall thickness
+
+                                    if door['type'] == 'vertical':
+                                        door_opening_rect_world = pygame.Rect(
+                                            door['wall_x_world'] - door_check_rect_depth / 2, # Center the check area on the wall line
+                                            door['opening_start_world'],
+                                            door_check_rect_depth, # Make it this deep
+                                            door['opening_end_world'] - door['opening_start_world']
+                                        )
+                                    elif door['type'] == 'horizontal':
+                                        door_opening_rect_world = pygame.Rect(
+                                            door['opening_start_world'],
+                                            door['wall_y_world'] - door_check_rect_depth / 2, # Center the check area on the wall line
+                                            door['opening_end_world'] - door['opening_start_world'],
+                                            door_check_rect_depth # Make it this deep
+                                        )
+
+                                    if door_opening_rect_world:
+                                        if npc_try_x_rect_world.colliderect(door_opening_rect_world) or \
+                                           npc_try_y_rect_world.colliderect(door_opening_rect_world) or \
+                                           npc_next_rect_world.colliderect(door_opening_rect_world):
+                                            is_moving_to_door_for_path = True
+                                            break
+                            
+                        if is_moving_to_door_for_path:
+                            pass 
+                        else:
+                            if not current_space_rect_world.contains(npc_try_x_rect_world):
+                                if ((next_x - npc_world_radius < current_space_rect_world.left and move_x < 0) or 
+                                    (next_x + npc_world_radius > current_space_rect_world.right and move_x > 0)):
+                                    can_move_x = False
+                                    print(f"DEBUG: NPC {npc.name} X-move blocked by wall. next_x: {next_x:.2f}, space_rect: {current_space_rect_world}")
+                            
+                            if not current_space_rect_world.contains(npc_try_y_rect_world):
+                                if ((next_y - npc_world_radius < current_space_rect_world.top and move_y < 0) or 
+                                    (next_y + npc_world_radius > current_space_rect_world.bottom and move_y > 0)):
+                                    can_move_y = False
+                                    print(f"DEBUG: NPC {npc.name} Y-move blocked by wall. next_y: {next_y:.2f}, space_rect: {current_space_rect_world}")
+                    
+                    if current_space_obj and hasattr(current_space_obj, 'items'):
+                        if not npc.avoiding_item_name: 
+                            for item_obj in current_space_obj.items:
+                                if not (hasattr(item_obj, 'position') and hasattr(item_obj, 'size') and
+                                        hasattr(item_obj, 'name') and
+                                        item_obj.position and item_obj.size and item_obj.name):
+                                    continue
+                                
+                                item_rect_world = pygame.Rect(
+                                    item_obj.position[0], item_obj.position[1],
+                                    item_obj.size[0], item_obj.size[1]
+                                )
+                                predicted_collision_x = can_move_x and npc_try_x_rect_world.colliderect(item_rect_world)
+                                predicted_collision_y = can_move_y and npc_try_y_rect_world.colliderect(item_rect_world)
+
+                                if predicted_collision_x or predicted_collision_y:
+                                    if not npc.original_move_target and npc.move_target: 
+                                        npc.original_move_target = list(npc.move_target)
+                                        npc.avoiding_item_name = item_obj.name
+                                        
+                                        avoid_offset_distance = npc_world_radius + (item_rect_world.width / 2) + 10 
+                                        temp_avoid_target_x = npc.position[0] 
+                                        temp_avoid_target_y = npc.position[1] 
+
+                                        if npc.position[0] < item_rect_world.centerx: 
+                                            temp_avoid_target_x = item_rect_world.left - avoid_offset_distance
+                                        else: 
+                                            temp_avoid_target_x = item_rect_world.right + avoid_offset_distance
+                                        
+                                        if npc.original_move_target:
+                                            temp_avoid_target_y = npc.original_move_target[1]
+                                        else: 
+                                            temp_avoid_target_y = item_rect_world.centery
+                                        
+                                        # Check current_space_obj and its attributes before using them for current_space_rect_world_for_avoid
+                                        if current_space_obj and hasattr(current_space_obj, 'display_pos') and hasattr(current_space_obj, 'display_size') and current_space_obj.display_pos and current_space_obj.display_size:
+                                            current_space_rect_world_for_avoid = pygame.Rect(
+                                                current_space_obj.display_pos[0], current_space_obj.display_pos[1],
+                                                current_space_obj.display_size[0], current_space_obj.display_size[1]
+                                            )
+                                            temp_avoid_target_x = max(current_space_rect_world_for_avoid.left + npc_world_radius, min(temp_avoid_target_x, current_space_rect_world_for_avoid.right - npc_world_radius))
+                                            temp_avoid_target_y = max(current_space_rect_world_for_avoid.top + npc_world_radius, min(temp_avoid_target_y, current_space_rect_world_for_avoid.bottom - npc_world_radius))
+                                        else: # Fallback if current_space_obj or its attributes are missing
+                                            print(f"DEBUG: NPC {npc.name} item avoidance - current_space_obj or its display attributes are invalid. Cannot constrain avoidance target.")
+
+
+                                        npc.move_target = [temp_avoid_target_x, temp_avoid_target_y]
+                                        print(f"DEBUG: NPC {npc.name} initiating avoidance of {item_obj.name}. Temp target: {npc.move_target}. X/Y move blocked this frame.")
+                                        can_move_x = False
+                                        can_move_y = False 
+                                        break 
+                    
+                    if can_move_x:
+                        npc.position[0] += move_x
+                    if can_move_y:
+                        npc.position[1] += move_y
+                    
+                    if not can_move_x or not can_move_y:
+                        print(f"DEBUG: NPC {npc.name} movement partially/fully blocked. can_move_x: {can_move_x}, can_move_y: {can_move_y}. Current pos: {npc.position}")
             
-            # 更新 display_pos 以反映最新的 npc.position (用於繪圖)
-            # display_pos 應為整數座標
-            if npc.position is not None:
+            # 更新 display_pos (這部分邏輯保持不變)
+            if npc.position is not None: # This should be correctly indented to be part of the main "for npc in npcs:" loop
                  npc.display_pos = [int(p) for p in npc.position]
-            elif npc.display_pos is None: # 以防萬一 position 和 display_pos 初始都為 None
-                 npc.display_pos = [0,0]
+
+            # --- 每幀末尾更新 NPC 的實際所在空間 ---
+            # 根據 NPC 的物理位置 (npc.position) 來確定其所在的空間
+            if npc.position is not None:
+                npc_rect_world = pygame.Rect(
+                    npc.position[0] - getattr(npc, 'radius', 10),
+                    npc.position[1] - getattr(npc, 'radius', 10),
+                    getattr(npc, 'radius', 10) * 2,
+                    getattr(npc, 'radius', 10) * 2
+                )
+                
+                # 尋找包含 NPC 中心點的空間
+                npc_center_point = (npc.position[0], npc.position[1])
+                current_space_name = getattr(npc.current_space, 'name', None) if hasattr(npc, 'current_space') else None
+                
+                # 首先檢查 NPC 是否在其當前記錄的空間中
+                if hasattr(npc, 'current_space') and npc.current_space and \
+                   hasattr(npc.current_space, 'display_pos') and hasattr(npc.current_space, 'display_size'):
+                    current_space_rect = pygame.Rect(
+                        npc.current_space.display_pos[0], npc.current_space.display_pos[1],
+                        npc.current_space.display_size[0], npc.current_space.display_size[1]
+                    )
+                    
+                    # 如果 NPC 仍在其記錄的當前空間中，無需更改
+                    if current_space_rect.collidepoint(npc_center_point):
+                        continue
+                
+                # 如果 NPC 不在其當前記錄的空間中，搜尋所有空間
+                found_new_space = False
+                for space_name, space_obj in all_spaces_dict.items():
+                    if not hasattr(space_obj, 'display_pos') or not hasattr(space_obj, 'display_size'):
+                        continue
+                        
+                    space_rect = pygame.Rect(
+                        space_obj.display_pos[0], space_obj.display_pos[1],
+                        space_obj.display_size[0], space_obj.display_size[1]
+                    )
+                    
+                    if space_rect.collidepoint(npc_center_point):
+                        # 找到新空間！更新 NPC 的 current_space
+                        if current_space_name != space_name:
+                            # 從舊空間移除 NPC
+                            if hasattr(npc, 'current_space') and npc.current_space and \
+                               hasattr(npc.current_space, 'npcs') and npc in npc.current_space.npcs:
+                                npc.current_space.npcs.remove(npc)
+                            
+                            # 更新 NPC 的 current_space
+                            npc.current_space = space_obj
+                            
+                            # 將 NPC 添加到新空間的 npcs 列表
+                            if npc not in space_obj.npcs:
+                                space_obj.npcs.append(npc)
+                                
+                            print(f"DEBUG: NPC {npc.name} SPACE UPDATE based on position - from {current_space_name} to {space_name}")
+                        
+                        found_new_space = True
+                        break
+                
+                # 如果找不到包含 NPC 的空間，輸出警告
+                if not found_new_space and npc.current_path_segment_target_space_name:
+                    print(f"WARNING: NPC {npc.name} at {npc.position} is not in any defined space. current_space remains {current_space_name}. target_segment: {npc.current_path_segment_target_space_name}")
+                    # 檢查門特例 - NPC 可能正好在門上，因此不在任何空間內
+                    # 但此時我們可能知道它的目標空間是什麼
+                    for door in calculated_doors:
+                        # 創建門矩形來檢查 NPC 是否在門上
+                        door_rect = None
+                        if door['type'] == 'vertical':
+                            door_rect = pygame.Rect(
+                                door['wall_x_world'] - WALL_THICKNESS_WORLD_UNITS,
+                                door['opening_start_world'],
+                                WALL_THICKNESS_WORLD_UNITS * 2,
+                                door['opening_end_world'] - door['opening_start_world']
+                            )
+                        elif door['type'] == 'horizontal':
+                            door_rect = pygame.Rect(
+                                door['opening_start_world'],
+                                door['wall_y_world'] - WALL_THICKNESS_WORLD_UNITS,
+                                door['opening_end_world'] - door['opening_start_world'],
+                                WALL_THICKNESS_WORLD_UNITS * 2
+                            )
+                        
+                        if door_rect and door_rect.colliderect(npc_rect_world) and \
+                           npc.current_path_segment_target_space_name in [door.get('s1_name'), door.get('s2_name')]:
+                            target_space_obj = all_spaces_dict.get(npc.current_path_segment_target_space_name)
+                            if target_space_obj:
+                                print(f"DEBUG: NPC {npc.name} IS ON A DOOR - Force setting current_space to target: {npc.current_path_segment_target_space_name}")
+                                
+                                # 從舊空間移除 NPC
+                                if hasattr(npc, 'current_space') and npc.current_space and \
+                                   hasattr(npc.current_space, 'npcs') and npc in npc.current_space.npcs:
+                                    npc.current_space.npcs.remove(npc)
+                                
+                                # 更新 NPC 的 current_space
+                                npc.current_space = target_space_obj
+                                
+                                # 將 NPC 添加到新空間的 npcs 列表
+                                if npc not in target_space_obj.npcs:
+                                    target_space_obj.npcs.append(npc)
+                                    
+                                break
 
         # 滑鼠控制視角移動邏輯
         pan_mouse_x, pan_mouse_y = pygame.mouse.get_pos()
@@ -1154,7 +1706,7 @@ def run_pygame_demo(world):
         for i, line in enumerate(info_lines):
             text = info_font.render(line, True, (60, 60, 60))
             screen.blit(text, (16, 12 + i * 22))
-        # 畫空間
+        # 畫空間背景 (修改：暫時不在此處繪製空間名稱，確保名稱在牆之上)
         for space in spaces:
             px, py = space.display_pos
             sx, sy = space.display_size
@@ -1163,8 +1715,155 @@ def run_pygame_demo(world):
                 int(sx*scale), int(sy*scale)
             )
             pygame.draw.rect(screen, (200,200,220), rect, border_radius=18)
+            
+            # 顯示空間碰撞邊緣
+            if show_collision_areas:
+                collision_surface = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+                collision_surface.fill(SPACE_COLLISION_COLOR)
+                pygame.draw.rect(collision_surface, (255, 0, 0, 180), collision_surface.get_rect(), 3)  # 紅色邊框
+                screen.blit(collision_surface, rect.topleft)
+
+        # --- 修改後的牆壁繪製邏輯 --- 
+        wall_thickness_scaled = int(max(1, WALL_THICKNESS_WORLD_UNITS * scale))
+        door_frame_thickness_scaled = int(max(1, DOOR_FRAME_THICKNESS_WORLD_UNITS * scale))
+
+        for current_space in spaces: # 使用 current_space 避免命名衝突
+            # 定義 current_space 的四條邊的資訊 (世界座標)
+            space_edges_world = {
+                "top":    {"fixed_coord": current_space.display_pos[1], "start_main_axis": current_space.display_pos[0], "end_main_axis": current_space.display_pos[0] + current_space.display_size[0], "orient": "h"},
+                "bottom": {"fixed_coord": current_space.display_pos[1] + current_space.display_size[1], "start_main_axis": current_space.display_pos[0], "end_main_axis": current_space.display_pos[0] + current_space.display_size[0], "orient": "h"},
+                "left":   {"fixed_coord": current_space.display_pos[0], "start_main_axis": current_space.display_pos[1], "end_main_axis": current_space.display_pos[1] + current_space.display_size[1], "orient": "v"},
+                "right":  {"fixed_coord": current_space.display_pos[0] + current_space.display_size[0], "start_main_axis": current_space.display_pos[1], "end_main_axis": current_space.display_pos[1] + current_space.display_size[1], "orient": "v"}
+            }
+
+            for edge_name, edge_details in space_edges_world.items():
+                # 獲取在這條特定邊上的所有門，並按開口位置排序
+                doors_on_this_edge = []
+                for door in calculated_doors:
+                    if (door["s1_name"] == current_space.name and door["s1_edge_name"] == edge_name) or \
+                       (door["s2_name"] == current_space.name and door["s2_edge_name"] == edge_name):
+                        # 確保門的類型與邊的方向匹配
+                        if (door["type"] == "horizontal" and edge_details["orient"] == "h") or \
+                           (door["type"] == "vertical" and edge_details["orient"] == "v"):
+                            doors_on_this_edge.append(door)
+                doors_on_this_edge.sort(key=lambda d: d["opening_start_world"]) 
+
+                # 開始繪製牆壁段
+                current_pos_on_edge = edge_details["start_main_axis"] # 游標，沿著邊的主軸移動
+
+                for door in doors_on_this_edge:
+                    door_start = door["opening_start_world"]
+                    door_end = door["opening_end_world"]
+
+                    # 繪製門前的那段牆 (如果有的話)
+                    if door_start > current_pos_on_edge:
+                        if edge_details["orient"] == "h": # 水平牆
+                            p1_world = (current_pos_on_edge, edge_details["fixed_coord"])
+                            p2_world = (door_start, edge_details["fixed_coord"])
+                        else: # 垂直牆
+                            p1_world = (edge_details["fixed_coord"], current_pos_on_edge)
+                            p2_world = (edge_details["fixed_coord"], door_start)
+                        
+                        p1_screen = (int(p1_world[0] * scale + final_draw_offset_x), int(p1_world[1] * scale + final_draw_offset_y))
+                        p2_screen = (int(p2_world[0] * scale + final_draw_offset_x), int(p2_world[1] * scale + final_draw_offset_y))
+                        if p1_screen != p2_screen: pygame.draw.line(screen, WALL_COLOR, p1_screen, p2_screen, wall_thickness_scaled)
+                    
+                    current_pos_on_edge = max(current_pos_on_edge, door_end) # 移動游標到門的結束位置之後
+                
+                # 繪製最後一個門之後 (或者如果沒有門，則是整條邊) 的那段牆
+                if current_pos_on_edge < edge_details["end_main_axis"]:
+                    if edge_details["orient"] == "h":
+                        p1_world = (current_pos_on_edge, edge_details["fixed_coord"])
+                        p2_world = (edge_details["end_main_axis"], edge_details["fixed_coord"])
+                    else:
+                        p1_world = (edge_details["fixed_coord"], current_pos_on_edge)
+                        p2_world = (edge_details["fixed_coord"], edge_details["end_main_axis"])
+
+                    p1_screen = (int(p1_world[0] * scale + final_draw_offset_x), int(p1_world[1] * scale + final_draw_offset_y))
+                    p2_screen = (int(p2_world[0] * scale + final_draw_offset_x), int(p2_world[1] * scale + final_draw_offset_y))
+                    if p1_screen != p2_screen: pygame.draw.line(screen, WALL_COLOR, p1_screen, p2_screen, wall_thickness_scaled)
+
+        # --- 單獨繪製門 (確保門在牆和空間背景之上) ---
+        if calculated_doors: # 只有在實際計算出門的情況下才嘗試繪製
+            for door in calculated_doors:
+                if door["type"] == "vertical":
+                    # 門的中心X是牆的X，開口是Y方向
+                    center_x_world = door["wall_x_world"]
+                    opening_start_y_world = door["opening_start_world"]
+                    opening_end_y_world = door["opening_end_world"]
+                    
+                    # 門的視覺矩形 (填充部分)
+                    door_fill_rect_world = pygame.Rect(
+                        center_x_world - WALL_THICKNESS_WORLD_UNITS / 2, # 門的填充與牆同厚，並居中於牆線
+                        opening_start_y_world,
+                        WALL_THICKNESS_WORLD_UNITS,
+                        opening_end_y_world - opening_start_y_world
+                    )
+                    door_fill_rect_screen = pygame.Rect(
+                        int(door_fill_rect_world.left * scale + final_draw_offset_x),
+                        int(door_fill_rect_world.top * scale + final_draw_offset_y),
+                        int(door_fill_rect_world.width * scale),
+                        int(door_fill_rect_world.height * scale)
+                    )
+                    if door_fill_rect_screen.width > 0 and door_fill_rect_screen.height > 0:
+                        s = pygame.Surface((door_fill_rect_screen.width, door_fill_rect_screen.height), pygame.SRCALPHA)
+                        s.fill(DOOR_COLOR)
+                        screen.blit(s, door_fill_rect_screen.topleft)
+
+                    # 門框 (繪製在門填充矩形的兩側)
+                    frame_offset_screen = door_frame_thickness_scaled // 2
+                    # 左門框 (緊貼填充矩形的左邊)
+                    p1_frame_left_screen = (door_fill_rect_screen.left - frame_offset_screen, door_fill_rect_screen.top)
+                    p2_frame_left_screen = (door_fill_rect_screen.left - frame_offset_screen, door_fill_rect_screen.bottom)
+                    if door_frame_thickness_scaled > 0: pygame.draw.line(screen, DOOR_FRAME_COLOR, p1_frame_left_screen, p2_frame_left_screen, door_frame_thickness_scaled)
+                    # 右門框 (緊貼填充矩形的右邊)
+                    p1_frame_right_screen = (door_fill_rect_screen.right + frame_offset_screen -1, door_fill_rect_screen.top) # -1 避免因取整導致偏移
+                    p2_frame_right_screen = (door_fill_rect_screen.right + frame_offset_screen -1, door_fill_rect_screen.bottom)
+                    if door_frame_thickness_scaled > 0: pygame.draw.line(screen, DOOR_FRAME_COLOR, p1_frame_right_screen, p2_frame_right_screen, door_frame_thickness_scaled)
+
+                elif door["type"] == "horizontal":
+                    center_y_world = door["wall_y_world"]
+                    opening_start_x_world = door["opening_start_world"]
+                    opening_end_x_world = door["opening_end_world"]
+
+                    door_fill_rect_world = pygame.Rect(
+                        opening_start_x_world,
+                        center_y_world - WALL_THICKNESS_WORLD_UNITS / 2,
+                        opening_end_x_world - opening_start_x_world,
+                        WALL_THICKNESS_WORLD_UNITS
+                    )
+                    door_fill_rect_screen = pygame.Rect(
+                        int(door_fill_rect_world.left * scale + final_draw_offset_x),
+                        int(door_fill_rect_world.top * scale + final_draw_offset_y),
+                        int(door_fill_rect_world.width * scale),
+                        int(door_fill_rect_world.height * scale)
+                    )
+                    if door_fill_rect_screen.width > 0 and door_fill_rect_screen.height > 0:
+                        s = pygame.Surface((door_fill_rect_screen.width, door_fill_rect_screen.height), pygame.SRCALPHA)
+                        s.fill(DOOR_COLOR)
+                        screen.blit(s, door_fill_rect_screen.topleft)
+
+                    frame_offset_screen = door_frame_thickness_scaled // 2
+                    # 上門框
+                    p1_frame_top_screen = (door_fill_rect_screen.left, door_fill_rect_screen.top - frame_offset_screen)
+                    p2_frame_top_screen = (door_fill_rect_screen.right, door_fill_rect_screen.top - frame_offset_screen)
+                    if door_frame_thickness_scaled > 0: pygame.draw.line(screen, DOOR_FRAME_COLOR, p1_frame_top_screen, p2_frame_top_screen, door_frame_thickness_scaled)
+                    # 下門框
+                    p1_frame_bottom_screen = (door_fill_rect_screen.left, door_fill_rect_screen.bottom + frame_offset_screen -1)
+                    p2_frame_bottom_screen = (door_fill_rect_screen.right, door_fill_rect_screen.bottom + frame_offset_screen -1)
+                    if door_frame_thickness_scaled > 0: pygame.draw.line(screen, DOOR_FRAME_COLOR, p1_frame_bottom_screen, p2_frame_bottom_screen, door_frame_thickness_scaled)
+
+        # 新增：繪製空間名稱 (確保在牆壁和門之上)
+        for space in spaces:
+            px, py = space.display_pos
+            sx, sy = space.display_size
+            space_screen_rect = pygame.Rect( # 計算空間在螢幕上的矩形
+                int(px*scale + final_draw_offset_x), int(py*scale + final_draw_offset_y),
+                int(sx*scale), int(sy*scale)
+            )
             text = font.render(space.name, True, (40,40,40))
-            screen.blit(text, (rect.x+8, rect.y+8))
+            screen.blit(text, (space_screen_rect.x+8, space_screen_rect.y+8)) # 在矩形左上角繪製名稱
+
         # 畫物品
         for item in items:
             # 優先用 item.position，如果沒有則找所屬空間
@@ -1182,7 +1881,22 @@ def run_pygame_demo(world):
                         break
                 if not found:   # 如果沒有找到物品
                     continue    # 跳過
+            
             draw_item(screen, item, ipos, scale, final_draw_offset_x, final_draw_offset_y, font)
+            
+            # 顯示物品碰撞邊緣
+            if show_collision_areas and hasattr(item, "size") and item.size:
+                item_rect = pygame.Rect(
+                    int(ipos[0] * scale + final_draw_offset_x),
+                    int(ipos[1] * scale + final_draw_offset_y),
+                    int(item.size[0] * scale),
+                    int(item.size[1] * scale)
+                )
+                collision_surface = pygame.Surface((item_rect.width, item_rect.height), pygame.SRCALPHA)
+                collision_surface.fill(ITEM_COLLISION_COLOR)
+                pygame.draw.rect(collision_surface, (0, 255, 0, 180), collision_surface.get_rect(), 3)  # 綠色邊框
+                screen.blit(collision_surface, item_rect.topleft)
+
         # 畫 NPC
         for npc in npcs:
             px, py = npc.display_pos
@@ -1192,7 +1906,20 @@ def run_pygame_demo(world):
             npc_text = font.render(npc.name, True, (0,0,0))
             screen.blit(npc_text, (draw_x-16, draw_y-int(npc.radius*scale)-10))
             
-            # 聊天氣泡（為每個NPC都顯示）
+            # 顯示 NPC 碰撞邊緣
+            if show_collision_areas:
+                npc_collision_rect = pygame.Rect(
+                    draw_x - int(npc.radius * scale),
+                    draw_y - int(npc.radius * scale),
+                    int(npc.radius * scale * 2),
+                    int(npc.radius * scale * 2)
+                )
+                collision_surface = pygame.Surface((npc_collision_rect.width, npc_collision_rect.height), pygame.SRCALPHA)
+                collision_surface.fill(NPC_COLLISION_COLOR)
+                pygame.draw.rect(collision_surface, (0, 0, 255, 180), collision_surface.get_rect(), 3)  # 藍色邊框
+                screen.blit(collision_surface, npc_collision_rect.topleft)
+                
+            # 聊天氣泡 - 移到循環內部，確保每個 NPC 都有氣泡
             bubble_font = info_font
             
             # 直接使用NPC的thinking_status（即self_talk_reasoning）
@@ -1244,7 +1971,7 @@ def run_pygame_demo(world):
                     int(npc.radius*scale*2) + 20
                 )
                 pygame.draw.rect(screen, (255, 215, 0), active_marker_rect, width=3, border_radius=15)
-            
+        
         # 畫互動按鈕
         button_w, button_h = 120, 44
         gap = 24
