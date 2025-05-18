@@ -8,6 +8,8 @@ import glob
 import asyncio
 from dataclasses import dataclass, field as dataclass_field
 import heapq
+import random # Added import for random offset
+import math   # Added import for math functions (cos, sin, radians)
 
 client = OpenAI()
 
@@ -1532,57 +1534,184 @@ class AI_System(BaseModel):
 
     def _change_item_description_impl(self, function_call: Any, npc: "NPC", available_items_for_interaction: List[str]) -> str:
         """
-        實現 ChangeItemDescriptionFunction 的具體操作。
-        這個方法應該根據 function_call 的具體參數來執行相應的操作。
-        例如：修改物品描述、更新物品狀態等。
+        實現 ChangeItemDescriptionFunction 的具體操作：修改指定物品的描述。
 
         Args:
-            function_call: LLM 選擇的 Function 物件的實例。
-            npc: 執行此互動的 NPC 物件。
-            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表
-                                             (target_item + inventory_items from NPC's action)。
-                                             用於在具體操作方法中進行額外的合法性驗證。
+            function_call: LLM 返回的、AI_System.update_schema 內部定義的 
+                           ChangeItemDescriptionFunction 類的實例。
+                           它包含 item_name 和 new_description。
+            npc: 執行此互動的 NPC 物件 (雖然在此特定函數中可能不直接使用 npc 的屬性，
+                 但保持參數一致性，以備將來擴展或日誌記錄)。
+            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表。
+                                             用於驗證 item_name 的合法性。
         Returns:
             一個描述功能執行結果的字串。
         """
-        # 這裡應該實現 ChangeItemDescriptionFunction 的具體操作邏輯
-        # 例如：修改物品描述、更新物品狀態等
-        return "ChangeItemDescriptionFunction 的具體操作尚未實現。"
+        item_name_to_change = getattr(function_call, 'item_name', None)
+        new_description = getattr(function_call, 'new_description', None)
+
+        if not item_name_to_change or new_description is None: # new_description 可以是空字串，但不應是 None
+            msg = "錯誤：ChangeItemDescriptionFunction 調用缺少 'item_name' 或 'new_description' 參數。"
+            print(f"[錯誤] {msg}")
+            return msg
+
+        # **驗證：要修改描述的物品是否在本次互動明確涉及的物品列表中**
+        if item_name_to_change not in available_items_for_interaction:
+            msg = f"警告：AI 試圖修改未在本次互動中明確指定的物品 '{item_name_to_change}' 的描述。已忽略此操作。"
+            print(f"[警告] {msg}")
+            return msg # 或者可以選擇僅記錄警告，並告知 NPC 未發生任何事
+
+        # 從全局物品列表 self.world["items"] 中找到該物品
+        if "items" in self.world and item_name_to_change in self.world["items"]:
+            item_object_to_modify = self.world["items"][item_name_to_change]
+            
+            old_description = item_object_to_modify.description
+            item_object_to_modify.description = new_description
+            
+            msg = f"物品 '{item_name_to_change}' 的描述已從 '{old_description}' 更新為 '{new_description}'。"
+            print(f"[系統日誌] {msg}")
+            return msg
+        else:
+            msg = f"錯誤：在嘗試修改描述時，未能從全局物品列表中找到物品 '{item_name_to_change}'。"
+            print(f"[錯誤] {msg}")
+            # 這種情況理論上不應發生，因為 item_name_to_change 來自 available_items_for_interaction，
+            # 而 available_items_for_interaction 中的物品應該都存在於世界中。
+            # 如果發生，可能表示數據不一致。
+            return msg
 
     def _move_item_to_inventory_impl(self, function_call: Any, npc: "NPC", available_items_for_interaction: List[str]) -> str:
         """
-        實現 MoveItemToInventoryFunction 的具體操作。
-        這個方法應該根據 function_call 的具體參數來執行相應的操作。
-        例如：將物品從空間移動到 NPC 庫存、從 NPC 庫存中取出物品等。
+        實現 MoveItemToInventoryFunction 的具體操作：將指定物品從當前空間移動到 NPC 的庫存。
 
         Args:
-            function_call: LLM 選擇的 Function 物件的實例。
+            function_call: LLM 返回的、AI_System.update_schema 內部定義的
+                           MoveItemToInventoryFunction 類的實例。它包含 item_name。
             npc: 執行此互動的 NPC 物件。
-            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表
-                                             (target_item + inventory_items from NPC's action)。
-                                             用於在具體操作方法中進行額外的合法性驗證。
+            available_items_for_interaction: NPC 本次互動明確聲明要使用的所有物品的名稱列表。
+                                             用於驗證 item_name 的合法性 (它應該是 target_item)。
         Returns:
             一個描述功能執行結果的字串。
         """
-        # 這裡應該實現 MoveItemToInventoryFunction 的具體操作邏輯
-        # 例如：將物品從空間移動到 NPC 庫存、從 NPC 庫存中取出物品等
-        return "MoveItemToInventoryFunction 的具體操作尚未實現。"
+        item_name_to_move = getattr(function_call, 'item_name', None)
+
+        if not item_name_to_move:
+            msg = "錯誤：MoveItemToInventoryFunction 調用缺少 'item_name' 參數。"
+            print(f"[錯誤] {msg}")
+            return msg
+
+        # **驗證1：要移動的物品是否在本次互動明確涉及的物品列表中**
+        # 對於 "撿起" 操作，這個 item_name 通常對應的是 NPC 互動意圖中的 target_item。
+        if item_name_to_move not in available_items_for_interaction:
+            msg = f"警告：AI 試圖拾取未在本次互動中明確指定的物品 '{item_name_to_move}'。已忽略此操作。"
+            print(f"[警告] {msg}")
+            return msg
+
+        # **驗證2：該物品是否存在於 NPC 當前所在的空間中**
+        item_object_in_space: Optional["Item"] = None # Forward reference for Item
+        item_index_in_space: Optional[int] = None
+
+        for i, item_in_space in enumerate(npc.current_space.items):
+            if item_in_space.name == item_name_to_move:
+                item_object_in_space = item_in_space
+                item_index_in_space = i
+                break
+        
+        if item_object_in_space is None or item_index_in_space is None:
+            msg = f"錯誤：在嘗試將物品 '{item_name_to_move}' 移動到庫存時，未在當前空間 '{npc.current_space.name}' 中找到該物品。"
+            print(f"[錯誤] {msg}")
+            # 這種情況如果發生，可能意味著 available_items_for_interaction 的構建邏輯
+            # (它聲稱該物品可用) 與實際世界狀態不一致，或者物品在驗證後被移除了。
+            return msg
+
+        # 從空間的物品列表中移除該物品
+        moved_item = npc.current_space.items.pop(item_index_in_space)
+        
+        # 將物品添加到 NPC 的庫存
+        # Inventory.add_item 應該處理容量等問題並返回一個結果字串
+        add_to_inventory_result = npc.inventory.add_item(moved_item) 
+        
+        msg = f"物品 '{moved_item.name}' 已成功從空間 '{npc.current_space.name}' 移動到 NPC '{npc.name}' 的庫存。({add_to_inventory_result.strip('.')})"
+        print(f"[系統日誌] {msg}")
+        return msg
 
     def _move_item_from_inventory_to_space_impl(self, function_call: Any, npc: "NPC") -> str:
         """
-        實現 MoveItemFromInventoryToSpaceFunction 的具體操作。
-        這個方法應該根據 function_call 的具體參數來執行相應的操作。
-        例如：將物品從 NPC 庫存中取出並放置到空間、從 NPC 庫存中取出物品等。
+        實現 MoveItemFromInventoryToSpaceFunction 的具體操作：
+        將指定物品從 NPC 的庫存移動到 NPC 當前所在的空間，並為其設置一個在 NPC 附近的位置。
 
         Args:
-            function_call: LLM 選擇的 Function 物件的實例。
+            function_call: LLM 返回的、AI_System.update_schema 內部定義的
+                           MoveItemFromInventoryToSpaceFunction 類的實例。它包含 item_name。
             npc: 執行此互動的 NPC 物件。
+                 我們將使用 npc.position 和 npc.radius (如果存在) 來計算物品的新位置。
         Returns:
             一個描述功能執行結果的字串。
         """
-        # 這裡應該實現 MoveItemFromInventoryToSpaceFunction 的具體操作邏輯
-        # 例如：將物品從 NPC 庫存中取出並放置到空間、從 NPC 庫存中取出物品等
-        return "MoveItemFromInventoryToSpaceFunction 的具體操作尚未實現。"
+        item_name_to_move = getattr(function_call, 'item_name', None)
+
+        if not item_name_to_move:
+            msg = "錯誤：MoveItemFromInventoryToSpaceFunction 調用缺少 'item_name' 參數。"
+            print(f"[錯誤] {msg}")
+            return msg
+
+        # **驗證：該物品是否存在於 NPC 的庫存中**
+        # 注意：item_name_to_move 的合法性 (即它必須是 npc_complete_inventory 的一員)
+        # 已經在 AI_System.update_schema 生成 MoveFromInventoryLiteral 時得到了保證。
+        # 所以這裡主要是從庫存中找到並移除它。
+
+        item_object_in_inventory: Optional["Item"] = None # Forward reference for Item
+        item_index_in_inventory: Optional[int] = None
+
+        for i, item_in_inv in enumerate(npc.inventory.items):
+            if item_in_inv.name == item_name_to_move:
+                item_object_in_inventory = item_in_inv
+                item_index_in_inventory = i
+                break
+        
+        if item_object_in_inventory is None or item_index_in_inventory is None:
+            msg = f"錯誤：在嘗試將物品 '{item_name_to_move}' 從庫存移動到空間時，未能從 NPC '{npc.name}' 的庫存中找到該物品。"
+            print(f"[錯誤] {msg}")
+            # 這種情況理論上不應發生，因為 schema 應該已經確保了 item_name 的有效性。
+            return msg
+
+        # 從 NPC 的庫存中移除該物品
+        moved_item = npc.inventory.items.pop(item_index_in_inventory)
+        
+        # 將物品添加到 NPC 當前所在的空間
+        npc.current_space.items.append(moved_item)
+
+        # --- 設置物品在空間中的新位置 (在 NPC 附近，帶隨機偏移) ---
+        position_info = ""
+        if hasattr(npc, 'position') and npc.position is not None:
+            npc_x, npc_y = npc.position
+            
+            base_offset_distance = getattr(npc, 'radius', 20) 
+            if base_offset_distance is None: 
+                base_offset_distance = 20
+
+            angle_degrees = random.uniform(0, 360)
+            angle_radians = math.radians(angle_degrees)
+
+            offset_distance = base_offset_distance * random.uniform(1.2, 1.8) 
+
+            offset_x = offset_distance * math.cos(angle_radians)
+            offset_y = offset_distance * math.sin(angle_radians)
+            
+            new_item_position = (round(npc_x + offset_x), round(npc_y + offset_y))
+            
+            if hasattr(moved_item, 'position'):
+                moved_item.position = new_item_position
+                position_info = f"並將其放置在 NPC 附近的位置 {new_item_position}"
+            else:
+                position_info = "(物品缺少 position 屬性，無法設置其在空間中的具體位置)"
+                print(f"[警告] 物品 '{moved_item.name}' 缺少 position 屬性，無法在空間中為其設置精確位置。")
+        else:
+            position_info = "(NPC 缺少 position 屬性，無法計算物品放置位置)"
+            print(f"[警告] NPC '{npc.name}' 缺少 position 屬性，無法為放下的物品 '{moved_item.name}' 計算放置位置。")
+        
+        msg = f"物品 '{moved_item.name}' 已成功從 NPC '{npc.name}' 的庫存移動到空間 '{npc.current_space.name}' {position_info}。"
+        print(f"[系統日誌] {msg}")
+        return msg
 
 
 

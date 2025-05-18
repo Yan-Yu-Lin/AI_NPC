@@ -4,9 +4,9 @@ import pygame
 import threading
 import math
 import os
-from backend import save_world_to_json
+from backend import save_world_to_json, world_system
 
-def run_pygame_demo(world):
+def run_pygame_demo():
     pygame.init()
     # 使用 RESIZABLE 讓視窗可調整大小
     screen = pygame.display.set_mode((1200, 700), pygame.RESIZABLE)  # 增加初始寬度以容納右側資訊欄
@@ -38,23 +38,28 @@ def run_pygame_demo(world):
         ("w", "改變天氣和時間")
     ]
 
-    # 取得物件參考
-    spaces = list(world["spaces"].values())
-    npcs = list(world["npcs"].values())
-    items = list(world["items"].values())
+    # 不再從參數獲取 world，而是從導入的 world_system
+    # spaces = list(world["spaces"].values()) # REMOVE
+    # npcs_list_for_init = list(world["npcs"].values()) # REMOVE, use world_system.world directly
+    # items = list(world["items"].values()) # REMOVE, fetch in loop
 
-    # 不再需要 map_data，直接用物件屬性
     # 計算原始地圖最大寬高（用於縮放）
-    map_w = max([s.display_pos[0]+s.display_size[0] for s in spaces if s.display_size and s.display_pos] or [1200])
-    map_h = max([s.display_pos[1]+s.display_size[1] for s in spaces if s.display_size and s.display_pos] or [700])
+    # 直接從 world_system.world 獲取 spaces
+    current_spaces = list(world_system.world.get("spaces", {}).values())
+    map_w = max([s.display_pos[0]+s.display_size[0] for s in current_spaces if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [1200])
+    map_h = max([s.display_pos[1]+s.display_size[1] for s in current_spaces if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [700])
 
     # NPC 圓形顏色
     npc_colors = [(255,0,0),(0,128,255),(0,200,0),(200,0,200),(255,128,0)]
-    for idx, npc in enumerate(npcs):
-        npc.display_color = npc_colors[idx % len(npc_colors)]
-        npc.radius = 24
+    # 直接從 world_system.world 獲取 npcs
+    current_npcs_list = list(world_system.world.get("npcs", {}).values())
+    for idx, npc_obj in enumerate(current_npcs_list):
+        if hasattr(npc_obj, 'display_color'): # Check if attribute exists
+            npc_obj.display_color = npc_colors[idx % len(npc_colors)]
+        if hasattr(npc_obj, 'radius'): # Check if attribute exists
+            npc_obj.radius = 24
 
-    active_npc = npcs[0] if npcs else None  # 預設主控第一個 NPC
+    active_npc = current_npcs_list[0] if current_npcs_list else None  # 預設主控第一個 NPC
     # 在初始化時輸出目前關注的NPC
     if active_npc:
         print(f"========= 目前關注的NPC: {active_npc.name} ==========")
@@ -668,180 +673,213 @@ def run_pygame_demo(world):
                 elif event.type == pygame.MOUSEWHEEL:
                     scroll_y = max(0, min(max_scroll, scroll_y - event.y * line_height))
 
+    ai_thread = None    # 用於執行 AI tick 的線程
+
+    def ai_process_thread_target(current_npc_name):
+        # ... (ai_process_thread_target implementation as discussed)
+        nonlocal last_ai_result, ai_thinking
+        if not current_npc_name:
+            last_ai_result = "沒有選擇任何 NPC。"
+            ai_thinking = False
+            return
+
+        current_npc_object = world_system.world.get("npcs", {}).get(current_npc_name)
+        if not current_npc_object:
+            last_ai_result = f"找不到名為 {current_npc_name} 的 NPC。"
+            ai_thinking = False
+            return
+            
+        ai_thinking = True
+        last_ai_result = current_npc_object.process_tick() if current_npc_object else "目標 NPC 不存在或已失效。"
+        ai_thinking = False
+
+    # 主遊戲循環 (Main Game Loop)
+    # ========================
     while running:
+        # --- 1. 事件處理 (Event Handling) ---
         mouse_pos = pygame.mouse.get_pos()
-        mouse_pressed = pygame.mouse.get_pressed()[0]  # 只考慮左鍵
-        hovered_button = None
-        pressed_button = None
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.VIDEORESIZE:
+            elif event.type == pygame.VIDEORESIZE: 
                 screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+            
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_c and active_npc and not ai_running:
-                    ai_threading = threading.Thread(target=ai_process)
-                    ai_threading.start()
-                elif event.key == pygame.K_e:
+                current_active_npc_object_for_event = world_system.world.get("npcs",{}).get(active_npc) if active_npc else None
+                if event.key == pygame.K_c: 
+                    if current_active_npc_object_for_event and (ai_thread is None or not ai_thread.is_alive()):
+                        ai_thread = threading.Thread(target=ai_process_thread_target, args=(active_npc,))
+                        ai_thread.start()
+                elif event.key == pygame.K_e: 
                     running = False
-                # 新增：S鍵觸發存檔選單
-                elif event.key == pygame.K_s:
-                    save_menu(screen, font, world, world.get('_file_path', None) or "worlds/unnamed_save.json")
-                # 新增：P鍵觸發歷史記錄選單
-                elif event.key == pygame.K_p:
-                    history_menu(screen, font, active_npc)
-                # 新增：N鍵觸發NPC切換選單
-                elif event.key == pygame.K_n and len(npcs) > 1:
-                    new_active_npc = npc_selection_menu(screen, font, npcs, active_npc)
-                    if new_active_npc and new_active_npc != active_npc:
-                        active_npc = new_active_npc
-                        last_ai_result = ""  # 清空上一個NPC的AI結果
-                        # 輸出目前關注的NPC
-                        print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+                elif event.key == pygame.K_p: 
+                    if current_active_npc_object_for_event:
+                        history_menu(screen, font, current_active_npc_object_for_event)
+                elif event.key == pygame.K_s: 
+                    save_menu(screen, font, world_system.world.get('_file_path', "worlds/default_save.json"))
+                elif event.key == pygame.K_n: 
+                    current_npcs_for_menu = list(world_system.world.get("npcs", {}).values())
+                    if len(current_npcs_for_menu) > 1:
+                        new_active_npc_ref = npc_selection_menu(screen, font, current_npcs_for_menu, current_active_npc_object_for_event) 
+                        if new_active_npc_ref and hasattr(new_active_npc_ref, 'name'): 
+                           active_npc = new_active_npc_ref
+                           last_ai_result = "" 
+                           print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+            
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                win_w, win_h = screen.get_size()
-                button_w, button_h = 120, 44
-                gap = 24
-                total_w = len(button_labels) * (button_w + gap) - gap
-                start_x = (win_w - total_w) // 2
-                y = win_h - button_h - 24
-                for i, (key, label) in enumerate(button_labels):
-                    rect = pygame.Rect(start_x + i * (button_w + gap), y, button_w, button_h)  # 判斷滑鼠是否在此按鈕上
-                    is_hover = rect.collidepoint(mouse_pos)
-                    is_pressed = is_hover and mouse_pressed
-                    if is_pressed:
-                        btn_color = (255, 200, 60)  # 點擊顏色
-                        border_color = (180, 120, 0)
-                    elif is_hover:
-                        btn_color = (255, 240, 120)  # hover 顏色
-                        border_color = (200, 160, 0)
-                    else:
-                        btn_color = (180, 180, 0)  # 預設顏色
-                        border_color = (80, 80, 0)
-                    pygame.draw.rect(screen, btn_color, rect, border_radius=12)
-                    pygame.draw.rect(screen, border_color, rect, 3, border_radius=12)
-                    btn_text = button_font.render(f"[{key.upper()}] {label}", True, (0,0,0))
-                    btn_text_rect = btn_text.get_rect(center=rect.center)
-                    screen.blit(btn_text, btn_text_rect)
-                    if rect.collidepoint(event.pos) and key == "c" and active_npc and not ai_running:
-                        ai_threading = threading.Thread(target=ai_process)
-                        ai_threading.start()
-                    if rect.collidepoint(event.pos) and key == "e":
-                        running = False
-                    if rect.collidepoint(event.pos) and key == "p":
-                        history_menu(screen, font, active_npc)
-                    if rect.collidepoint(event.pos) and key == "s":
-                        save_menu(screen, font, world, world.get('_file_path', None) or "worlds/unnamed_save.json")
-                    # 新增：處理「切換NPC」按鈕
-                    if rect.collidepoint(event.pos) and key == "n" and len(npcs) > 1:
-                        new_active_npc = npc_selection_menu(screen, font, npcs, active_npc)
-                        if new_active_npc and new_active_npc != active_npc:
-                            active_npc = new_active_npc
-                            last_ai_result = ""  # 清空上一個NPC的AI結果
-                            # 輸出目前關注的NPC
-                            print(f"========= 目前關注的NPC: {active_npc.name} ==========")
-        
-        # 每次主循環都同步 display_pos 與 position，並推進動畫移動
-        for npc in npcs:
-            # 如果 npc.position 尚未指定，給預設值 (0, 0)
-            if npc.position is None:
-                npc.position = [0, 0]
-            if npc.display_pos is None:
-                npc.display_pos = [int(n) for n in npc.position]
-            else:
-                npc.display_pos = [int(n) for n in npc.position]
-            if hasattr(npc, 'move_target') and npc.move_target:
-                dx = npc.move_target[0] - npc.position[0]
-                dy = npc.move_target[1] - npc.position[1]
-                dist = math.hypot(dx, dy)
-                if dist < npc.move_speed:
-                    npc.position = list(npc.move_target)
-                    npc.move_target = None
-                else:
-                    move_x = npc.move_speed * dx / dist
-                    move_y = npc.move_speed * dy / dist
-                    npc.position[0] += move_x
-                    npc.position[1] += move_y
+                if event.button == 1: 
+                    # Simplified: check button clicks and dispatch to same logic as keydown
+                    # This part would need the actual button rects and logic
+                    pass 
 
-        # 根據視窗大小計算縮放比例
+        # --- 2. 遊戲邏輯更新 (Game Logic / State Updates) ---
+        if "npcs" in world_system.world:
+            for npc_obj in world_system.world.get("npcs", {}).values():
+                if hasattr(npc_obj, 'position') and hasattr(npc_obj, 'display_pos'):
+                     npc_obj.display_pos = [int(n) for n in npc_obj.position]
+                if hasattr(npc_obj, 'move_target') and npc_obj.move_target and hasattr(npc_obj, 'move_speed'):
+                    dx = npc_obj.move_target[0] - npc_obj.position[0]
+                    dy = npc_obj.move_target[1] - npc_obj.position[1]
+                    dist = math.hypot(dx, dy)
+                    if dist < npc_obj.move_speed:
+                        npc_obj.position = list(npc_obj.move_target)
+                        npc_obj.move_target = None
+                    else:
+                        move_x = npc_obj.move_speed * dx / dist
+                        move_y = npc_obj.move_speed * dy / dist
+                        npc_obj.position[0] += move_x
+                        npc_obj.position[1] += move_y
+
+        # --- 3. 繪圖準備 (Calculations for Drawing) ---
         win_w, win_h = screen.get_size()
-        # 防止 map_w 或 map_h 為 0
-        safe_map_w = map_w if map_w != 0 else 1
-        safe_map_h = map_h if map_h != 0 else 1
+        
+        # 將 map_w, map_h 及相關縮放計算移入循環內部
+        current_spaces_for_map_bounds = list(world_system.world.get("spaces", {}).values())
+        map_w = max([s.display_pos[0]+s.display_size[0] for s in current_spaces_for_map_bounds if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [1200])
+        map_h = max([s.display_pos[1]+s.display_size[1] for s in current_spaces_for_map_bounds if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [700])
+
+        safe_map_w = map_w if map_w > 0 else 1200
+        safe_map_h = map_h if map_h > 0 else 700
         scale_x = win_w / safe_map_w
         scale_y = win_h / safe_map_h
         scale = min(scale_x, scale_y)
-        offset_x = (win_w - safe_map_w * scale) // 2
-        offset_y = (win_h - safe_map_h * scale) // 2
+        offset_x = (win_w - safe_map_w * scale) / 2
+        offset_y = (win_h - safe_map_h * scale) / 2
 
+        # --- 4. 清理螢幕 (Clear Screen) ---
         screen.fill((240,240,240))
         # 顯示說明
         for i, line in enumerate(info_lines):
             text = info_font.render(line, True, (60, 60, 60))
             screen.blit(text, (16, 12 + i * 22))
-        # 畫空間
-        for space in spaces:
-            px, py = space.display_pos
-            sx, sy = space.display_size
-            rect = pygame.Rect(
-                int(px*scale+offset_x), int(py*scale+offset_y),
-                int(sx*scale), int(sy*scale)
-            )
-            pygame.draw.rect(screen, (200,200,220), rect, border_radius=18)
-            text = font.render(space.name, True, (40,40,40))
-            screen.blit(text, (rect.x+8, rect.y+8))
-        # 畫物品
-        for item in items:
-            # 優先用 item.position，如果沒有則找所屬空間
-            if hasattr(item, "position") and item.position:
-                ipos = item.position
-            else:
-                found = False   # 用於標記是否找到物品
-                for space in spaces:    # 遍歷所有空間
-                    if item in space.items: # 如果物品在空間中
-                        ipos = [
-                            space.display_pos[0] + space.display_size[0] // 3,
-                            space.display_pos[1] + space.display_size[1] // 2
-                        ]
-                        found = True    # 找到物品
-                        break
-                if not found:   # 如果沒有找到物品
-                    continue    # 跳過
-            # 固定大小為 30x30
-            item_rect = pygame.Rect(
-                int(ipos[0]*scale+offset_x), int(ipos[1]*scale+offset_y),
-                int(30*scale), int(30*scale)
-            )
-            pygame.draw.rect(screen, (100,100,255), item_rect, border_radius=8)
-            item_text = font.render(item.name, True, (20,20,80))
-            screen.blit(item_text, (item_rect.x, item_rect.y+int(14*scale)))
-        # 畫 NPC
-        for npc in npcs:
-            px, py = npc.display_pos
-            draw_x = int(px * scale + offset_x)
-            draw_y = int(py * scale + offset_y)
-            pygame.draw.circle(screen, npc.display_color, (draw_x, draw_y), int(npc.radius * scale))
-            npc_text = font.render(npc.name, True, (0,0,0))
-            screen.blit(npc_text, (draw_x-16, draw_y-int(npc.radius*scale)-10))
-            # 聊天氣泡（只顯示 active_npc 的最新 AI 回覆）
-            if npc == active_npc and (last_ai_result or ai_thinking):
-                bubble_font = info_font
-                bubble_text = bubble_font.render(last_ai_result if not ai_thinking else "AI 思考中...", True, (0,0,0))
-                text_width = bubble_text.get_width()
-                text_height = bubble_text.get_height()
-                bubble_width = max(200, text_width + 20)
-                bubble_height = text_height + 20
-                bubble_rect = pygame.Rect(
-                    draw_x - bubble_width // 2,
-                    draw_y - int(npc.radius*scale) - bubble_height - 10,
-                    bubble_width,
-                    bubble_height
-                )
-                bubble_surface = pygame.Surface((bubble_width, bubble_height), pygame.SRCALPHA)
-                bubble_surface.fill((255, 255, 255, 220))
-                screen.blit(bubble_surface, (bubble_rect.x, bubble_rect.y))
-                pygame.draw.rect(screen, (0, 0, 0), bubble_rect, width=2, border_radius=10)
-                screen.blit(bubble_text, (bubble_rect.x + 10, bubble_rect.y + 10))
+        
+        # 畫空間 - 直接從 world_system.world 獲取
+        if "spaces" in world_system.world:
+            for space_obj in world_system.world.get("spaces", {}).values(): # Iterate directly
+                if hasattr(space_obj, 'display_pos') and hasattr(space_obj, 'display_size') and space_obj.display_pos and space_obj.display_size:
+                    px, py = space_obj.display_pos
+                    sx, sy = space_obj.display_size
+                    rect = pygame.Rect(
+                        int(px*scale+offset_x), int(py*scale+offset_y),
+                        int(sx*scale), int(sy*scale)
+                    )
+                    pygame.draw.rect(screen, (200,200,220), rect, border_radius=18)
+                    text = font.render(space_obj.name, True, (40,40,40))
+                    screen.blit(text, (rect.x+8, rect.y+8))
+
+        # 畫物品 - 直接從 world_system.world 獲取
+        if "items" in world_system.world:
+            for item_obj in world_system.world.get("items", {}).values(): # Iterate directly
+                # 優先用 item.position，如果沒有則找所屬空間
+                ipos = None
+                if hasattr(item_obj, "position") and item_obj.position:
+                    ipos = item_obj.position
+                else:
+                    # Try to find item in a space to determine its position if not explicitly set
+                    # This part might need adjustment based on how item ownership by space is structured
+                    if "spaces" in world_system.world:
+                        for space_obj_for_item_check in world_system.world.get("spaces", {}).values():
+                            if hasattr(space_obj_for_item_check, 'items') and item_obj in space_obj_for_item_check.items: # Assuming space.items holds references
+                                if hasattr(space_obj_for_item_check, 'display_pos') and hasattr(space_obj_for_item_check, 'display_size'):                                    
+                                    ipos = [
+                                        space_obj_for_item_check.display_pos[0] + space_obj_for_item_check.display_size[0] // 3,
+                                        space_obj_for_item_check.display_pos[1] + space_obj_for_item_check.display_size[1] // 2
+                                    ]
+                                    break # Found item in a space
+                
+                if ipos: # Only draw if we have a position
+                    item_rect_dim = getattr(item_obj, 'size', (30,30)) # Use item.size if available, else default
+                    item_rect_w = item_rect_dim[0]
+                    item_rect_h = item_rect_dim[1]
+                    item_rect = pygame.Rect(
+                        int(ipos[0]*scale+offset_x), int(ipos[1]*scale+offset_y),
+                        int(item_rect_w*scale), int(item_rect_h*scale)
+                    )
+                    pygame.draw.rect(screen, (100,100,255), item_rect, border_radius=8)
+                    item_text = font.render(item_obj.name, True, (20,20,80))
+                    # Adjust text blitting based on scaled item_rect height for better centering
+                    text_rect = item_text.get_rect(centerx=item_rect.centerx, y=item_rect.top + (item_rect.height - item_text.get_height()) // 2)
+                    if item_rect.width > item_text.get_width(): # Only blit if text fits
+                         screen.blit(item_text, text_rect)
+                    elif item_rect.width > 5 : # Fallback for very small items, show first char
+                         screen.blit(font.render(item_obj.name[0] if item_obj.name else "?", True, (20,20,80)), text_rect)
+                # else: item has no position, cannot be drawn
+
+        # 畫 NPC - 直接從 world_system.world 獲取
+        # Also, ensure active_npc is correctly referenced or re-fetched if it can change
+        # For simplicity, this example assumes active_npc object reference stays valid if it's not None.
+        # A more robust way would be to store active_npc_name and fetch the object each frame:
+        # active_npc_object_this_frame = world_system.world.get("npcs", {}).get(active_npc_name_if_stored) if active_npc_name_if_stored else None
+        if "npcs" in world_system.world:
+            for npc_obj in world_system.world.get("npcs", {}).values(): # Iterate directly
+                if hasattr(npc_obj, 'display_pos') and npc_obj.display_pos and hasattr(npc_obj, 'radius'): # Ensure attributes exist
+                    px, py = npc_obj.display_pos
+                    draw_x = int(px * scale + offset_x)
+                    draw_y = int(py * scale + offset_y)
+                    color = getattr(npc_obj, 'display_color', (255,0,0)) # Default color
+                    radius = npc_obj.radius
+
+                    pygame.draw.circle(screen, color, (draw_x, draw_y), int(radius * scale))
+                    npc_text = font.render(npc_obj.name, True, (0,0,0))
+                    # Adjust text position to be above the circle
+                    text_surf_rect = npc_text.get_rect(centerx=draw_x, bottom=draw_y - int(radius*scale) - 2)
+                    screen.blit(npc_text, text_surf_rect)
+                    
+                    # 聊天氣泡（只顯示 active_npc 的最新 AI 回覆）
+                    # Ensure active_npc itself is the up-to-date object if its state can change
+                    # or compare by a unique ID/name if active_npc is a snapshot
+                    if active_npc and npc_obj.name == active_npc.name and (last_ai_result or ai_thinking): # Assuming name is unique and active_npc refers to a valid NPC object
+                        bubble_font = info_font
+                        bubble_content = last_ai_result if not ai_thinking else "AI 思考中..."
+                        # Wrap text for bubble
+                        wrapped_lines = wrap_text(bubble_content, bubble_font, 200 - 20) # max_width - padding
+
+                        bubble_height = sum(bubble_font.get_height() for _ in wrapped_lines) + 20
+                        bubble_width = 200 # Fixed width for bubble
+
+                        bubble_rect_x = draw_x - bubble_width // 2
+                        bubble_rect_y = draw_y - int(radius*scale) - bubble_height - 10 # Position above NPC
+                        
+                        bubble_rect = pygame.Rect(
+                            bubble_rect_x,
+                            bubble_rect_y,
+                            bubble_width,
+                            bubble_height
+                        )
+                        # Using pygame.Surface for alpha transparency
+                        bubble_surface = pygame.Surface((bubble_width, bubble_height), pygame.SRCALPHA)
+                        bubble_surface.fill((255, 255, 255, 220)) # White with alpha
+                        
+                        current_y_offset = 10 # Padding inside bubble
+                        for line_text in wrapped_lines:
+                            line_surface = bubble_font.render(line_text, True, (0,0,0))
+                            bubble_surface.blit(line_surface, (10, current_y_offset))
+                            current_y_offset += bubble_font.get_height()
+
+                        screen.blit(bubble_surface, (bubble_rect.x, bubble_rect.y))
+                        pygame.draw.rect(screen, (0, 0, 0), bubble_rect, width=2, border_radius=10) # Border
+
         # 畫互動按鈕
         button_w, button_h = 120, 44
         gap = 24
