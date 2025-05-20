@@ -181,6 +181,158 @@ class Inventory(BaseModel):
 ## 定義 NPC 類
 
 # --- A* Pathfinding Utilities (移至 backend.py) ---
+
+@dataclass
+class SimpleRect:
+    """簡單的矩形類，用於路徑規劃的碰撞檢測"""
+    x: float
+    y: float
+    width: float
+    height: float
+    
+    def collidepoint(self, x: float, y: float) -> bool:
+        """檢查點 (x, y) 是否在矩形內"""
+        return (self.x <= x <= self.x + self.width and
+                self.y <= y <= self.y + self.height)
+                
+    def colliderect(self, other: "SimpleRect") -> bool:
+        """檢查兩個矩形是否重疊"""
+        return (self.x < other.x + other.width and
+                self.x + self.width > other.x and
+                self.y < other.y + other.height and
+                self.y + self.height > other.y)
+
+# 為了路徑規劃實現 PathPlanner 類
+class PathPlanner(BaseModel):
+    """
+    路徑規劃器類，用於處理 NPC 的路徑規劃和障礙物避免
+    """
+    grid_cell_size: int = 20
+    npc_radius: float = 15.0
+    model_config = {"arbitrary_types_allowed": True}
+    
+    def get_space_obstacles_for_grid(self, space: "Space", obstacle_buffer: float = 5.0) -> List["SimpleRect"]:
+        """獲取空間中的障礙物。用於網格路徑規劃。"""
+        obstacles = []
+        
+        if not hasattr(space, 'items') or not space.items:
+            return obstacles
+        
+        for item in space.items:
+            if hasattr(item, 'position') and item.position and hasattr(item, 'size') and item.size:
+                item_x, item_y = item.position
+                item_w, item_h = item.size
+                
+                # 加上緩衝區，使NPC不會太接近物品
+                buffered_x = item_x - obstacle_buffer
+                buffered_y = item_y - obstacle_buffer
+                buffered_w = item_w + 2 * obstacle_buffer
+                buffered_h = item_h + 2 * obstacle_buffer
+                
+                obstacles.append(SimpleRect(buffered_x, buffered_y, buffered_w, buffered_h))
+        
+        return obstacles
+    
+    def find_path_with_obstacles(self, start_space: Space, goal_space: Space,
+                             start_pos: Tuple[float,float], goal_pos: Tuple[float,float],
+                             all_spaces: Dict[str, Space]) -> List[Tuple[float,float]]:
+        """
+        尋找考慮障礙物的路徑
+        
+        Args:
+            start_space: 起始空間
+            goal_space: 目標空間
+            start_pos: 起始位置 (世界座標)
+            goal_pos: 目標位置 (世界座標)
+            all_spaces: 所有空間的字典
+            
+        Returns:
+            包含路徑點的列表 (世界座標)
+        """
+        path = [start_pos, goal_pos]
+        
+        # 如果起點和終點在同一空間
+        if start_space == goal_space:
+            # 檢查是否有障礙物
+            obstacles = self.get_space_obstacles_for_grid(start_space)
+            if not obstacles:
+                return path
+            
+            # 在這裡我們可以實現障礙物避讓的邏輯
+            # 簡化版：檢查直線路徑是否穿過障礙物，如果是，添加中間點
+            for obstacle in obstacles:
+                if self._line_intersects_rect(start_pos, goal_pos, obstacle):
+                    # 簡單的障礙物避讓：繞過障礙物中心
+                    midpoint = (
+                        (start_pos[0] + goal_pos[0]) / 2,
+                        (start_pos[1] + goal_pos[1]) / 2
+                    )
+                    # 將中間點向外偏移
+                    offset_x = midpoint[0] - obstacle.x - obstacle.width / 2
+                    offset_y = midpoint[1] - obstacle.y - obstacle.height / 2
+                    
+                    # 標準化偏移
+                    norm = math.sqrt(offset_x**2 + offset_y**2)
+                    if norm > 0:
+                        offset_x = offset_x / norm * (obstacle.width + 20)
+                        offset_y = offset_y / norm * (obstacle.height + 20)
+                    
+                    # 創建避讓點
+                    avoid_point = (
+                        obstacle.x + obstacle.width/2 + offset_x,
+                        obstacle.y + obstacle.height/2 + offset_y
+                    )
+                    
+                    # 更新路徑
+                    path = [start_pos, avoid_point, goal_pos]
+                    break
+            
+            return path
+        
+        # 使用高級路徑規劃找到空間級路徑
+        space_level_path = find_path_astar(all_spaces, start_space.name, goal_space.name)
+        
+        if not space_level_path or len(space_level_path) <= 1:
+            return path
+        
+        # 返回起點和終點構成的直線路徑
+        # 在實際應用中，這裡可以實現更複雜的路徑規劃邏輯
+        return path
+    
+    def _line_intersects_rect(self, start: Tuple[float, float], end: Tuple[float, float], rect: SimpleRect) -> bool:
+        """檢查線段是否與矩形相交"""
+        # 檢查起點或終點是否在矩形內
+        if rect.collidepoint(start[0], start[1]) or rect.collidepoint(end[0], end[1]):
+            return True
+        
+        # 檢查線段是否與矩形的任一邊相交
+        edges = [
+            ((rect.x, rect.y), (rect.x + rect.width, rect.y)),
+            ((rect.x + rect.width, rect.y), (rect.x + rect.width, rect.y + rect.height)),
+            ((rect.x, rect.y + rect.height), (rect.x + rect.width, rect.y + rect.height)),
+            ((rect.x, rect.y), (rect.x, rect.y + rect.height))
+        ]
+        
+        for edge_start, edge_end in edges:
+            if self._line_segments_intersect(start, end, edge_start, edge_end):
+                return True
+        
+        return False
+    
+    def _line_segments_intersect(self, p1: Tuple[float, float], p2: Tuple[float, float],
+                            p3: Tuple[float, float], p4: Tuple[float, float]) -> bool:
+        """檢查兩線段是否相交"""
+        def cross_product(p1, p2, p3):
+            return (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p2[1] - p1[1]) * (p3[0] - p1[0])
+        
+        d1 = cross_product(p3, p4, p1)
+        d2 = cross_product(p3, p4, p2)
+        d3 = cross_product(p1, p2, p3)
+        d4 = cross_product(p1, p2, p4)
+        
+        return ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+               ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0))
+
 def heuristic(space_a_pos: Tuple[float, float], space_b_pos: Tuple[float, float]) -> float:
     """計算兩點之間的歐幾里得距離。"""
     return math.sqrt((space_a_pos[0] - space_b_pos[0])**2 + (space_a_pos[1] - space_b_pos[1])**2)
@@ -212,7 +364,7 @@ def find_path_astar(world_spaces: Dict[str, "Space"], start_space_name: str, goa
 
     def get_space_center(space_obj: "Space") -> Tuple[float, float]:
         if not hasattr(space_obj, 'display_pos') or not hasattr(space_obj, 'display_size') or \
-           space_obj.display_pos is None or space_obj.display_size is None:
+            space_obj.display_pos is None or space_obj.display_size is None:
             # print(f"警告: 空間 {getattr(space_obj, 'name', '未知')} 缺少 display_pos 或 display_size 或其值為None。") # Debugging
             return (0.0, 0.0)
         return (
@@ -266,7 +418,7 @@ def find_path_astar(world_spaces: Dict[str, "Space"], start_space_name: str, goa
 
         for neighbor_space_obj in current_space_obj.connected_spaces:
             if not hasattr(neighbor_space_obj, 'name') or neighbor_space_obj.name not in world_spaces or \
-               neighbor_space_obj.name is None: # 確保 neighbor_space_obj.name 不是 None
+                neighbor_space_obj.name is None: # 確保 neighbor_space_obj.name 不是 None
                 continue 
 
             neighbor_name = neighbor_space_obj.name
@@ -316,10 +468,41 @@ class NPC(BaseModel):
     # 新增用於避讓物品的欄位
     original_move_target: Optional[List[float]] = None
     avoiding_item_name: Optional[str] = None # 假設用物品名稱作為ID
+    
+    # 新增：用於路徑規劃的欄位
+    path_planner: Optional["PathPlanner"] = None
+    current_path_points: List[Tuple[float, float]] = Field(default_factory=list)
 
     # ForwardRef必須在模型定義之後更新
     # Space.model_rebuild() # 這行通常在所有模型定義後執行
     # Inventory.model_rebuild()
+    
+    def set_path_planner(self, planner: "PathPlanner"):
+        """設置NPC使用的路徑規劃器實例"""
+        self.path_planner = planner
+        
+    def plan_path_to_target(self):
+        """使用路徑規劃器規劃從當前位置到目標位置的路徑"""
+        if not self.path_planner or not self.move_target or not self.position:
+            return
+            
+        if hasattr(self, "current_space") and self.current_space:
+            # 從當前位置到目標位置的路徑規劃
+            start_pos = tuple(self.position[:2])  # 確保是二維座標
+            target_pos = tuple(self.move_target[:2])  # 確保是二維座標
+            
+            # 使用全局空間數據
+            global world_system
+            if world_system and world_system.world and 'spaces' in world_system.world:
+                all_spaces = world_system.world['spaces']
+                # 使用路徑規劃器規劃路徑
+                self.current_path_points = self.path_planner.find_path_with_obstacles(
+                    self.current_space, 
+                    self.current_space,  # 當前僅支持在同一空間內規劃
+                    start_pos, 
+                    target_pos, 
+                    all_spaces
+                )
 
     @classmethod
 
@@ -488,6 +671,20 @@ class NPC(BaseModel):
                 self.current_path_segment_target_space_name = self.path_to_follow.pop(0)
                 print(f"DEBUG: move_to_space - 找到路徑: {path}. 設置目標段落: {self.current_path_segment_target_space_name}")
                 self.thinking_status = f"正在透過 A* 路徑前往 {final_target_name}。下一站: {self.current_path_segment_target_space_name}"
+                
+                # 新增：如果當前空間和下一個空間有連接點，使用路徑規劃器規劃到門口的路徑
+                if self.current_path_segment_target_space_name in all_world_spaces:
+                    next_space = all_world_spaces[self.current_path_segment_target_space_name]
+                    # 當NPC有位置時，嘗試規劃到連接點的路徑
+                    if hasattr(self, 'position') and self.position and len(self.position) >= 2 and hasattr(self, 'path_planner') and self.path_planner:
+                        # 找到當前空間到下一空間的連接點（通常是門口）
+                        connection_point = self._find_connection_point(self.current_space, next_space)
+                        if connection_point:
+                            # 設置移動目標為連接點
+                            self.move_target = list(connection_point)
+                            # 使用路徑規劃器規劃到連接點的路徑
+                            self.plan_path_to_target()
+                
                 return f"開始 A* 路徑前往 {final_target_name}。下一站: {self.current_path_segment_target_space_name}"
             else: 
                 # 路徑只有 [current, target]，所以 path[1:] 就是 [target]，pop 後 path_to_follow 為空
@@ -506,35 +703,180 @@ class NPC(BaseModel):
             if hasattr(self, 'current_path_segment_target_space_name'):
                 self.current_path_segment_target_space_name = None
             return f"找不到從 {self.current_space.name} 到 {final_target_name} 的 A* 路徑。"
+            
+    def _find_connection_point(self, current_space: "Space", next_space: "Space") -> Optional[Tuple[float, float]]:
+        """找到兩個空間之間的連接點（門口位置）"""
+        # 這裡假設空間是矩形，並檢查它們是否有重疊
+        if not hasattr(current_space, 'display_pos') or not hasattr(current_space, 'display_size') or \
+           not hasattr(next_space, 'display_pos') or not hasattr(next_space, 'display_size'):
+            return None
+            
+        # 獲取空間矩形
+        cs_x, cs_y = current_space.display_pos
+        cs_w, cs_h = current_space.display_size
+        ns_x, ns_y = next_space.display_pos
+        ns_w, ns_h = next_space.display_size
+        
+        # 檢查空間是否有重疊區域
+        overlap_x1 = max(cs_x, ns_x)
+        overlap_y1 = max(cs_y, ns_y)
+        overlap_x2 = min(cs_x + cs_w, ns_x + ns_w)
+        overlap_y2 = min(cs_y + cs_h, ns_y + ns_h)
+        
+        # 如果有重疊
+        if overlap_x2 > overlap_x1 and overlap_y2 > overlap_y1:
+            # 返回重疊區域中心
+            connection_x = (overlap_x1 + overlap_x2) / 2
+            connection_y = (overlap_y1 + overlap_y2) / 2
+            return (connection_x, connection_y)
+            
+        # 如果沒有重疊，檢查它們是否為相鄰空間（假設相差在30像素內可視為相鄰）
+        tolerance = 30.0
+        
+        # 檢查左/右相鄰
+        if abs(cs_x + cs_w - ns_x) < tolerance or abs(ns_x + ns_w - cs_x) < tolerance:
+            # 計算垂直方向上的重疊
+            vertical_overlap_y1 = max(cs_y, ns_y)
+            vertical_overlap_y2 = min(cs_y + cs_h, ns_y + ns_h)
+            
+            if vertical_overlap_y2 > vertical_overlap_y1:
+                # 在垂直中點和水平相接處創建連接點
+                middle_y = (vertical_overlap_y1 + vertical_overlap_y2) / 2
+                
+                if abs(cs_x + cs_w - ns_x) < tolerance:
+                    # 當前空間在左側，下一個空間在右側
+                    connection_x = (cs_x + cs_w + ns_x) / 2
+                else:
+                    # 當前空間在右側，下一個空間在左側
+                    connection_x = (ns_x + ns_w + cs_x) / 2
+                    
+                return (connection_x, middle_y)
+        
+        # 檢查上/下相鄰
+        if abs(cs_y + cs_h - ns_y) < tolerance or abs(ns_y + ns_h - cs_y) < tolerance:
+            # 計算水平方向上的重疊
+            horizontal_overlap_x1 = max(cs_x, ns_x)
+            horizontal_overlap_x2 = min(cs_x + cs_w, ns_x + ns_w)
+            
+            if horizontal_overlap_x2 > horizontal_overlap_x1:
+                # 在水平中點和垂直相接處創建連接點
+                middle_x = (horizontal_overlap_x1 + horizontal_overlap_x2) / 2
+                
+                if abs(cs_y + cs_h - ns_y) < tolerance:
+                    # 當前空間在上方，下一個空間在下方
+                    connection_y = (cs_y + cs_h + ns_y) / 2
+                else:
+                    # 當前空間在下方，下一個空間在上方
+                    connection_y = (ns_y + ns_h + cs_y) / 2
+                    
+                return (middle_x, connection_y)
+        
+        # 如果以上都不符合，返回兩個空間中心點的中點作為連接點
+        center_cs_x = cs_x + cs_w / 2
+        center_cs_y = cs_y + cs_h / 2
+        center_ns_x = ns_x + ns_w / 2
+        center_ns_y = ns_y + ns_h / 2
+        
+        return ((center_cs_x + center_ns_x) / 2, (center_cs_y + center_ns_y) / 2)
 
     def move_to_item(self, item_name: str) -> str:
         """
         將 NPC 移動到指定物品的位置。
+        修改：嚴格限制在當前空間查找物品，並計算停在物品邊緣。
         """
         # 在當前空間中查找物品
         for item in self.current_space.items:
             if item.name.lower() == item_name.lower():
-                if hasattr(item, "position") and item.position:
-                    # 直接移動到物品位置
-                    self.move_target = list(item.position)  # 轉換為列表
-                    self.move_speed = 5
-                    return f"移動到{item.name}的位置"
+                # --- 開始：計算停在物品邊緣的邏輯 ---
+                if hasattr(item, "position") and item.position and \
+                    hasattr(item, "size") and item.size and \
+                    hasattr(self, "radius") and self.radius is not None and \
+                    hasattr(self, "position") and self.position is not None and \
+                    all(isinstance(p, (float, int)) for p in self.position) and \
+                    all(isinstance(p, (float, int)) for p in item.position) and \
+                    all(isinstance(s, (float, int)) for s in item.size):
+
+                    # 確保 item.position 和 item.size 是有效的數值列表
+                    item_pos_x, item_pos_y = float(item.position[0]), float(item.position[1])
+                    item_size_w, item_size_h = float(item.size[0]), float(item.size[1])
+                    npc_pos_x, npc_pos_y = float(self.position[0]), float(self.position[1])
+                    npc_rad = float(self.radius)
+                    
+                    # 假設 item.position 是左上角
+                    item_center_x = item_pos_x + item_size_w / 2
+                    item_center_y = item_pos_y + item_size_h / 2
+
+                    vec_x = item_center_x - npc_pos_x
+                    vec_y = item_center_y - npc_pos_y
+                    dist_to_item_center = math.hypot(vec_x, vec_y)
+
+                    item_effective_radius = max(item_size_w, item_size_h) / 2
+                    
+                    stopping_distance_from_center = npc_rad + item_effective_radius + 5.0 # 5.0 是小間隙
+
+                    # 最小互動距離，防止 NPC 距離太遠就停下 (例如，比目標停止點遠2步)
+                    move_speed_val = self.move_speed if self.move_speed is not None and self.move_speed > 0 else 1.0
+                    min_interaction_engage_distance = stopping_distance_from_center + (move_speed_val * 2.0)
+
+                    if dist_to_item_center <= stopping_distance_from_center: 
+                        self.move_target = list(self.position) 
+                        self.original_move_target = None 
+                        self.avoiding_item_name = None   
+                        return f"已經在 {item.name} 旁邊，準備互動。"
+                    elif dist_to_item_center <= min_interaction_engage_distance : 
+                        norm_vec_x = vec_x / dist_to_item_center if dist_to_item_center > 1e-6 else 0 # 避免除以零
+                        norm_vec_y = vec_y / dist_to_item_center if dist_to_item_center > 1e-6 else 0
+                        
+                        target_x = item_center_x - norm_vec_x * stopping_distance_from_center
+                        target_y = item_center_y - norm_vec_y * stopping_distance_from_center
+                        
+                        self.move_target = [target_x, target_y]
+                        if not self.original_move_target : self.original_move_target = list(self.move_target) 
+                        
+                        # 新增：使用路徑規劃器規劃路徑
+                        self.plan_path_to_target()
+                        
+                        return f"靠近 {item.name} 的邊緣準備互動。"
+                    else: 
+                        norm_vec_x = vec_x / dist_to_item_center if dist_to_item_center > 1e-6 else 0
+                        norm_vec_y = vec_y / dist_to_item_center if dist_to_item_center > 1e-6 else 0
+                        
+                        target_x = item_center_x - norm_vec_x * stopping_distance_from_center
+                        target_y = item_center_y - norm_vec_y * stopping_distance_from_center
+                        
+                        self.move_target = [target_x, target_y]
+                        if not self.original_move_target : self.original_move_target = list(self.move_target)
+                        
+                        # 新增：使用路徑規劃器規劃路徑
+                        self.plan_path_to_target()
+                        
+                        return f"移動到 {item.name} 的邊緣進行互動。"
+                # --- 結束：計算停在物品邊緣的邏輯 ---
                 else:
-                    # 如果物品沒有位置，則移動到空間中心
-                    space_center_x = self.current_space.display_pos[0] + self.current_space.display_size[0] // 3
-                    space_center_y = self.current_space.display_pos[1] + self.current_space.display_size[1] // 2
-                    self.move_target = [space_center_x, space_center_y]  # 使用列表而不是元組
-                    self.move_speed = 5
-                    return f"移動到{item.name}的位置"
+                    # This block executes if the detailed edge calculation cannot be performed
+                    if hasattr(item, "position") and item.position:
+                        self.move_target = [float(p) for p in item.position]
+                        
+                        # 新增：使用路徑規劃器規劃路徑
+                        self.plan_path_to_target()
+                        
+                        return f"移動到{item.name}的位置 (詳細邊緣計算所需資訊不足)"
+                    else: # Item does not have a direct position, or the earlier check failed.
+                        # Fallback: try to use current_space center
+                        if hasattr(self.current_space, 'display_pos') and self.current_space.display_pos and \
+                           hasattr(self.current_space, 'display_size') and self.current_space.display_size and \
+                           len(self.current_space.display_pos) == 2 and len(self.current_space.display_size) == 2:
+                            space_center_x = self.current_space.display_pos[0] + self.current_space.display_size[0] // 3
+                            space_center_y = self.current_space.display_pos[1] + self.current_space.display_size[1] // 2
+                            self.move_target = [float(space_center_x), float(space_center_y)]
+                            
+                            # 新增：使用路徑規劃器規劃路徑
+                            self.plan_path_to_target()
+                        else: # Fallback if space position/size is invalid
+                            self.move_target = [0.0,0.0] # Default to origin or handle error
+                        return f"移動到{item.name}所在空間的大致位置 (物品位置資訊不足或空間資訊無效)"
 
-        # 如果在當前空間中找不到物品，則查找連接的空間
-        for connected_space in self.current_space.connected_spaces:
-            for item in connected_space.items:
-                if item.name.lower() == item_name.lower():
-                    # 先移動到連接的空間
-                    return self.move_to_space(connected_space.name)
-
-        return f"找不到物品：{item_name}"
+        return f"在 {self.current_space.name} 中找不到物品：{item_name} (請確認 AI 選擇的物品確實存在於當前空間)"
 
     def interact_with_item(self, item_name: str, how_to_interact: str) -> str:
         """
@@ -578,89 +920,255 @@ class NPC(BaseModel):
 
     def process_tick(self, user_input: Optional[str] = None):
         """
-        Process a single tick of the NPC's behavior.
-
-        Args:
-            user_input: Optional input from the user
-
-        Returns:
-            A string describing the result of the NPC's action
+        處理這一 tick 的 NPC 行為
         """
-        global world_system
-        if world_system is None:
-            from backend import AI_System
-            world_system = AI_System()
-        # Get the dynamically generated schema
-        GeneralResponse = self.update_schema()
+        global world_system # 移到方法頂部
 
-        # History and AI call
+        # 檢查 NPC 是否完成了互動等待
+        if self.waiting_interaction and self.waiting_interaction.get("started", False):
+            # 檢查是否到達目的地
+            if self.move_target is None: # 已到達
+                interaction_result = self.complete_interaction()
+                self.waiting_interaction = None # 清除等待狀態
+                self.history.append({"role": "system", "content": f"互動完成: {interaction_result}"})
+                return f"與 {self.waiting_interaction.get('item_name', '物品')} 的互動完成: {interaction_result}"
+            else: # 尚未到達，繼續移動
+                # (移動邏輯會在下面處理)
+                self.action_status = f"正在前往 {self.waiting_interaction.get('item_name', '物品')} 以便互動"
+                # return f"NPC {self.name} 正在前往 {self.waiting_interaction.get('item_name', '物品')} 以便互動..."
+        
+        # 記錄此 NPC 進入當前空間
         if self.first_tick:
             self.add_space_to_history()
             self.first_tick = False
+            
+        # --- 移動處理開始 ---
+        original_thinking_status_before_move = self.thinking_status # 保存移動前的思考狀態
+        movement_occurred_this_tick = False
+
+        if hasattr(self, 'move_target') and self.move_target and hasattr(self, 'position') and self.position:
+            movement_occurred_this_tick = True # 標記發生了移動計算
+            target_x, target_y = self.move_target[0], self.move_target[1]
+            curr_x, curr_y = self.position[0], self.position[1]
+            
+            next_point = None
+            if hasattr(self, 'current_path_points') and self.current_path_points and len(self.current_path_points) > 0:
+                next_point = self.current_path_points[0]
+                target_x, target_y = next_point[0], next_point[1]
+            
+            dx = target_x - curr_x
+            dy = target_y - curr_y
+            distance = math.sqrt(dx * dx + dy * dy)
+            move_speed_val = self.move_speed if hasattr(self, 'move_speed') and self.move_speed is not None else 1.0
+            move_distance = min(distance, move_speed_val)
+            
+            if distance < move_speed_val: # 已到達（或非常接近）目標點
+                self.position[0] = target_x
+                self.position[1] = target_y
+                # print(f"DEBUG: NPC {self.name} REACHED point {target_x, target_y}. Current pos: {self.position}")
+                
+                if next_point and hasattr(self, 'current_path_points') and self.current_path_points:
+                    self.current_path_points.pop(0)
+                    if not self.current_path_points: # 如果路徑點已空
+                        # print(f"DEBUG: NPC {self.name} finished path. Original target: {self.original_move_target}, Current pos: {self.position}")
+                        # 檢查是否到達最終的 original_move_target
+                        if self.original_move_target and \
+                            math.isclose(self.position[0], self.original_move_target[0]) and \
+                            math.isclose(self.position[1], self.original_move_target[1]):
+                            print(f"DEBUG: NPC {self.name} has reached the final original_move_target: {self.original_move_target}")
+                            self.move_target = None
+                            self.original_move_target = None
+                            self.avoiding_item_name = None
+                            self.action_status = f"已到達 {self.original_move_target}"
+                            self.thinking_status = f"已到達目的地 {self.original_move_target}"
+                        elif not self.current_path_segment_target_space_name: # 如果不是跨空間移動
+                            # print(f"DEBUG: NPC {self.name} path empty, not cross-space, clearing move_target.")
+                            self.move_target = None # 清除移動目標，因為路徑已完成
+                            self.original_move_target = None
+                            self.avoiding_item_name = None
+
+
+                elif self.move_target and math.isclose(self.position[0], self.move_target[0]) and math.isclose(self.position[1], self.move_target[1]):
+                    # 如果沒有路徑點，但已到達 move_target，則清除
+                    # print(f"DEBUG: NPC {self.name} reached direct move_target, clearing it.")
+                    self.move_target = None
+                    self.original_move_target = None
+                    self.avoiding_item_name = None
+            else: # 尚未到達目標點，繼續移動
+                norm_dx = dx / distance if distance > 1e-9 else 0
+                norm_dy = dy / distance if distance > 1e-9 else 0
+                new_x = curr_x + norm_dx * move_distance
+                new_y = curr_y + norm_dy * move_distance
+                
+                can_move_x = True
+                can_move_y = True
+                if hasattr(self.current_space, 'display_pos') and hasattr(self.current_space, 'display_size'):
+                    space_x, space_y = self.current_space.display_pos
+                    space_width, space_height = self.current_space.display_size
+                    npc_radius = self.radius if hasattr(self, 'radius') and self.radius is not None else 15
+                    
+                    if new_x - npc_radius < space_x or new_x + npc_radius > space_x + space_width:
+                        can_move_x = False
+                    if new_y - npc_radius < space_y or new_y + npc_radius > space_y + space_height:
+                        can_move_y = False
+                
+                if can_move_x: self.position[0] = new_x
+                if can_move_y: self.position[1] = new_y
+                self.action_status = f"移動到 {[round(target_x,1), round(target_y,1)]}"
+
+            # 檢查是否需要移動到下一個空間
+            if not self.move_target and self.current_path_segment_target_space_name:
+                global world_system
+                target_space_obj = world_system.world['spaces'].get(self.current_path_segment_target_space_name)
+                if target_space_obj:
+                    # NPC 進入新空間的邏輯
+                    if self.current_space and hasattr(self.current_space, 'npcs') and self in self.current_space.npcs:
+                        self.current_space.npcs.remove(self)
+                    self.current_space = target_space_obj
+                    if hasattr(target_space_obj, 'npcs') and self not in target_space_obj.npcs:
+                        target_space_obj.npcs.append(self)
+                    self.add_space_to_history() # 記錄進入新空間
+                    
+                    # 更新NPC的位置到新空間的中心 (或入口點，如果有的話)
+                    if hasattr(self, '_find_connection_point'):
+                        entry_point = self._find_connection_point(target_space_obj, self.current_space) # 反過來找入口
+                        if entry_point:
+                            self.position = list(entry_point)
+                        else:
+                            self.position = [target_space_obj.display_pos[0] + target_space_obj.display_size[0] / 2,
+                                        target_space_obj.display_pos[1] + target_space_obj.display_size[1] / 2]
+                    else: # Fallback
+                        self.position = [target_space_obj.display_pos[0] + target_space_obj.display_size[0] / 2,
+                                        target_space_obj.display_pos[1] + target_space_obj.display_size[1] / 2]
+
+
+                    self.thinking_status = f"已到達 {self.current_space.name}."
+                    self.action_status = f"進入 {self.current_space.name}"
+                    
+                    if self.path_to_follow: # 如果還有後續路徑
+                        self.current_path_segment_target_space_name = self.path_to_follow.pop(0)
+                        self.thinking_status = f"繼續前往 {self.current_path_segment_target_space_name}"
+                        # 這裡可以再次調用 move_to_space 的部分邏輯來規劃到下一個連接點
+                        next_target_space_obj = world_system.world['spaces'].get(self.current_path_segment_target_space_name)
+                        if next_target_space_obj and hasattr(self, '_find_connection_point') and self.path_planner:
+                            connection_point = self._find_connection_point(self.current_space, next_target_space_obj)
+                            if connection_point:
+                                self.move_target = list(connection_point)
+                                self.original_move_target = list(connection_point) # 更新原始目標
+                                self.plan_path_to_target()
+                    else: # 到達最終空間
+                        self.current_path_segment_target_space_name = None
+                        self.thinking_status = f"已完成跨空間移動，抵達最終空間 {self.current_space.name}"
+                else:
+                    self.current_path_segment_target_space_name = None # 目標空間無效
+        # --- 移動處理結束 ---
+
+        # 如果這一 tick 主要是移動，或者正在等待互動，則可能不需要立即進行新的 AI 思考
+        if movement_occurred_this_tick and self.move_target: # 如果還在移動中
+            # self.thinking_status = original_thinking_status_before_move # 恢復移動前的思考狀態，如果被移動覆蓋
+            return self.action_status # 返回當前移動狀態
+
+        if self.waiting_interaction and self.waiting_interaction.get("started", False) and self.move_target:
+             return f"NPC {self.name} 正在前往 {self.waiting_interaction.get('item_name', '物品')} 以便互動..."
+
+
+        # --- AI 思考和行動決策 ---
+        self.is_thinking = True
+        self.thinking_status = "正在思考..."
+        
+        # global world_system # 確保 world_system 是最新的 # <--- 原本在這裡，已上移
+        if world_system is None:
+            from backend import AI_System # 應該在頂層或初始化時完成
+            world_system = AI_System() 
+            # world_system.initialize_world(...) # 需要 world data, 這不應該在這裡發生
+
+        GeneralResponseSchema = self.update_schema() # 獲取動態 schema
+
         if user_input:
             self.history.append({"role": "user", "content": f"User: {user_input}"})
 
-        completion = client.beta.chat.completions.parse(
-            model="gpt-4o-2024-11-20",
-            messages=self.history,
-            response_format=GeneralResponse
+        # 準備 API 調用
+        messages_for_api = list(self.history) # 複製歷史記錄
+        
+        # 構建系統提示 (可以根據需要調整)
+        system_prompt = (
+            f"你是 NPC {self.name} ({self.description}). "
+            f"目前時間是 {world_system.time}, 天氣是 {world_system.weather}. "
+            f"你位於 {self.current_space.name} ({self.current_space.description}). "
+            f"你的家是 {self.home_space_name if self.home_space_name else '未設定'}. "
+            "根據你的歷史、當前環境和用戶輸入來決定下一步行動。"
+            "思考你的目標和可能的行動，然後選擇一個具體的行動或決定什麼都不做。"
         )
-        response = completion.choices[0].message.parsed
+        messages_for_api.insert(0, {"role": "system", "content": system_prompt})
+        
+        self.action_status = "" # 清除上一tick的行動狀態
+        
+        try:
+            completion = client.beta.chat.completions.parse(
+                model="gpt-4o", # 使用標準模型
+                messages=messages_for_api, # 使用添加了系統提示的歷史記錄
+                response_format=GeneralResponseSchema # 使用動態生成的 Pydantic 模型
+            )
+            response = completion.choices[0].message.parsed
+        except Exception as e:
+            print(f"ERROR: NPC {self.name} 思考時 API 調用失敗: {e}")
+            self.history.append({"role": "system", "content": f"思考錯誤: {e}"})
+            self.is_thinking = False
+            self.thinking_status = f"思考出錯: {e}"
+            return f"NPC {self.name} 思考出錯。"
 
-        # Add AI's self-reasoning and action to history
-        reasoning_content = f"Thinking: {response.self_talk_reasoning}"
-        self.history.append({"role": "assistant", "content": reasoning_content})
+        self.is_thinking = False
+        self.thinking_status = response.self_talk_reasoning if response and hasattr(response, 'self_talk_reasoning') else "思考完成"
+        
+        # 將 AI 的思考加入歷史
+        if response and hasattr(response, 'self_talk_reasoning'):
+            self.history.append({"role": "assistant", "content": f"Thinking: {response.self_talk_reasoning}"})
+        else: # response 可能為 None 或沒有 self_talk_reasoning
+             self.history.append({"role": "assistant", "content": "Thinking: (No reasoning provided or error in response structure)"})
 
-        # Add the attempted action to history if one exists
-        if response.action:
-            if hasattr(response.action, "action_type"):
-                if response.action.action_type == "interact_item":
-                    action_content = f"Action: I'm interacting with {response.action.interact_with} by {response.action.how_to_interact}"
-                elif response.action.action_type == "enter_space":
-                    action_content = f"Action: I'm moving to {response.action.target_space}"
-                elif response.action.action_type == "talk_to_npc":
-                    action_content = f"Action: I'm talking to {response.action.target_npc} saying: {response.action.dialogue}"
+
+        action_result_str = "決定不採取行動。"
+        if response and response.action:
+            action = response.action
+            action_type_str = getattr(action, 'action_type', 'unknown_action')
+            self.action_status = f"準備執行: {action_type_str}"
+
+            if hasattr(action, "action_type"):
+                action_description_for_history = ""
+                if action.action_type == "interact_item":
+                    item_name = getattr(action, 'interact_with', '未知物品')
+                    how_to = getattr(action, 'how_to_interact', '未知方式')
+                    action_result_str = self.interact_with_item(item_name, how_to)
+                    action_description_for_history = f"Action: 計劃與 {item_name} 互動: {how_to}"
+                elif action.action_type == "enter_space":
+                    target_space = getattr(action, 'target_space', '未知空間')
+                    action_result_str = self.move_to_space(target_space)
+                    action_description_for_history = f"Action: 計劃移動到 {target_space}"
+                elif action.action_type == "talk_to_npc":
+                    target_npc = getattr(action, 'target_npc', '未知NPC')
+                    dialogue = getattr(action, 'dialogue', '')
+                    action_result_str = self.talk_to_npc(target_npc, dialogue) # 同步版本
+                    # 如果需要異步，可以使用 await self.async_talk_to_npc(target_npc, dialogue)
+                    # 但 process_tick 本身不是 async, 所以這裡用同步的
+                    action_description_for_history = f"Action: 計劃對 {target_npc} 說: {dialogue}"
                 else:
-                    action_content = "Action: Attempting an unknown action type"
+                    action_result_str = f"未知行動類型: {action.action_type}"
+                    action_description_for_history = f"Action: 嘗試未知行動 {action.action_type}"
+                self.history.append({"role": "assistant", "content": action_description_for_history})
             else:
-                action_content = "Action: Action has no type specified"
+                action_result_str = "行動指令無效 (缺少 action_type)。"
+                self.history.append({"role": "system", "content": "系統: AI返回的行動指令無效。"})
+        else: # No action
+            self.history.append({"role": "system", "content": "系統: AI決定不採取行動。"})
+            self.action_status = "無行動"
 
-            self.history.append({"role": "assistant", "content": action_content})
-
-        print("\n=== AI Response ===")
-        print(response)
-        print("==================\n")
-
-        # Handle the action
-        if not response.action:
-            self.history.append({
-                "role": "system",
-                "content": "No action taken"
-            })
-            return response.self_talk_reasoning
-
-        action = response.action
-        result = ""
-
-        # Process the action based on its type
-        if hasattr(action, "action_type"):
-            if action.action_type == "interact_item":
-                # 使用 InteractItemAction 的 interact_with 和 how_to_interact 屬性
-                result = self.interact_with_item(action.interact_with, action.how_to_interact)
-            elif action.action_type == "enter_space":
-                result = self.move_to_space(action.target_space)
-            elif action.action_type == "talk_to_npc":
-                result = self.talk_to_npc(action.target_npc, action.dialogue)
-            else:
-                result = f"Unknown action type: {action.action_type}"
-        else:
-            result = "Action has no type specified."
-
-        self.history.append({"role": "system", "content": result})
-        print("\n=== Action Result ===")
-        print(result)
-        print("===================\n")
-        return response.self_talk_reasoning
+        self.history.append({"role": "system", "content": f"結果: {action_result_str}"})
+        # print(f"NPC {self.name} process_tick result: {self.thinking_status} | Action: {action_result_str}")
+        
+        # 返回 AI 的思考過程 + 執行結果的簡述
+        final_output = f"思考: {self.thinking_status}\n行動結果: {action_result_str}"
+        self.action_status = action_result_str # 更新NPC的行動狀態，以便顯示
+        return final_output
 
     def talk_to_npc(self, target_npc_name: str, dialogue: str) -> str:
         """
