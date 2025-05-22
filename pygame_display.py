@@ -5,6 +5,7 @@ import threading
 import math
 import os
 from backend import save_world_to_json, world_system
+from typing import Optional
 
 def run_pygame_demo():
     pygame.init()
@@ -38,43 +39,37 @@ def run_pygame_demo():
         ("w", "改變天氣和時間")
     ]
 
-    # 不再從參數獲取 world，而是從導入的 world_system
-    # spaces = list(world["spaces"].values()) # REMOVE
-    # npcs_list_for_init = list(world["npcs"].values()) # REMOVE, use world_system.world directly
-    # items = list(world["items"].values()) # REMOVE, fetch in loop
-
-    # 計算原始地圖最大寬高（用於縮放）
-    # 直接從 world_system.world 獲取 spaces
-    current_spaces = list(world_system.world.get("spaces", {}).values())
-    map_w = max([s.display_pos[0]+s.display_size[0] for s in current_spaces if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [1200])
-    map_h = max([s.display_pos[1]+s.display_size[1] for s in current_spaces if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [700])
-
     # NPC 圓形顏色
     npc_colors = [(255,0,0),(0,128,255),(0,200,0),(200,0,200),(255,128,0)]
-    # 直接從 world_system.world 獲取 npcs
-    current_npcs_list = list(world_system.world.get("npcs", {}).values())
-    for idx, npc_obj in enumerate(current_npcs_list):
-        if hasattr(npc_obj, 'display_color'): # Check if attribute exists
-            npc_obj.display_color = npc_colors[idx % len(npc_colors)]
-        if hasattr(npc_obj, 'radius'): # Check if attribute exists
-            npc_obj.radius = 24
+    default_npc_radius = 24
 
-    active_npc = current_npcs_list[0] if current_npcs_list else None  # 預設主控第一個 NPC
-    # 在初始化時輸出目前關注的NPC
-    if active_npc:
-        print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+    # active_npc 改為存儲 NPC 的名字 (active_npc_name)
+    active_npc_name: Optional[str] = None
+    # 初始化時嘗試獲取第一個 NPC 的名字
+    # world_system.npcs_data 是一個字典 {name: NPCObject}
+    if world_system.npcs_data: # Check if npcs_data is not empty and has been populated
+        try:
+            active_npc_name = next(iter(world_system.npcs_data.keys()))
+            print(f"========= 目前關注的NPC: {active_npc_name} ==========")
+        except StopIteration: # Should not happen if npcs_data is not empty
+             print("========= npcs_data 為空，無法選取初始 active_npc_name ===========")
     else:
-        print("========= 目前沒有可用的NPC ===========")
+        print("========= 初始化時 NPCs 數據為空 ===========")
+
     last_ai_result = ""
     ai_thinking = False
-    ai_threading = None
+    ai_thread: Optional[threading.Thread] = None
     ai_running = False
 
     def ai_process():
         nonlocal last_ai_result, ai_thinking, ai_running
         ai_running = True
         ai_thinking = True
-        last_ai_result = active_npc.process_tick() if active_npc else ""
+        current_active_npc_object = world_system.npcs_data.get(active_npc_name) if active_npc_name else None
+        if current_active_npc_object:
+            last_ai_result = current_active_npc_object.process_tick()
+        else:
+            last_ai_result = "錯誤：AI Process 中 active_npc 未設定或無效。"
         ai_thinking = False
         ai_running = False
 
@@ -675,22 +670,22 @@ def run_pygame_demo():
 
     ai_thread = None    # 用於執行 AI tick 的線程
 
-    def ai_process_thread_target(current_npc_name):
-        # ... (ai_process_thread_target implementation as discussed)
-        nonlocal last_ai_result, ai_thinking
-        if not current_npc_name:
-            last_ai_result = "沒有選擇任何 NPC。"
+    def ai_process_thread_target(current_npc_name_for_thread: Optional[str]):
+        nonlocal last_ai_result, ai_thinking, ai_running
+        if not current_npc_name_for_thread:
+            last_ai_result = "錯誤：未指定要處理的 NPC。"
             ai_thinking = False
             return
 
-        current_npc_object = world_system.world.get("npcs", {}).get(current_npc_name)
-        if not current_npc_object:
-            last_ai_result = f"找不到名為 {current_npc_name} 的 NPC。"
+        # Get the latest NPC object from world_system using the name
+        npc_to_process = world_system.npcs_data.get(current_npc_name_for_thread)
+        if not npc_to_process:
+            last_ai_result = f"錯誤：在 AI 線程中找不到名為 '{current_npc_name_for_thread}' 的 NPC。"
             ai_thinking = False
             return
             
         ai_thinking = True
-        last_ai_result = current_npc_object.process_tick() if current_npc_object else "目標 NPC 不存在或已失效。"
+        last_ai_result = npc_to_process.process_tick()
         ai_thinking = False
 
     # 主遊戲循環 (Main Game Loop)
@@ -698,6 +693,10 @@ def run_pygame_demo():
     while running:
         # --- 1. 事件處理 (Event Handling) ---
         mouse_pos = pygame.mouse.get_pos()
+        
+        # +++ Get mouse button states +++
+        mouse_buttons = pygame.mouse.get_pressed()  # Returns a tuple (left, middle, right)
+        mouse_pressed = mouse_buttons[0]          # True if left mouse button is pressed
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -706,10 +705,11 @@ def run_pygame_demo():
                 screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
             
             elif event.type == pygame.KEYDOWN:
-                current_active_npc_object_for_event = world_system.world.get("npcs",{}).get(active_npc) if active_npc else None
+                current_active_npc_object_for_event = world_system.npcs_data.get(active_npc_name) if active_npc_name else None
                 if event.key == pygame.K_c: 
                     if current_active_npc_object_for_event and (ai_thread is None or not ai_thread.is_alive()):
-                        ai_thread = threading.Thread(target=ai_process_thread_target, args=(active_npc,))
+                        print(f"[DEBUG] Starting AI thread for {active_npc_name}")
+                        ai_thread = threading.Thread(target=ai_process_thread_target, args=(active_npc_name,))
                         ai_thread.start()
                 elif event.key == pygame.K_e: 
                     running = False
@@ -719,23 +719,23 @@ def run_pygame_demo():
                 elif event.key == pygame.K_s: 
                     save_menu(screen, font, world_system.world.get('_file_path', "worlds/default_save.json"))
                 elif event.key == pygame.K_n: 
-                    current_npcs_for_menu = list(world_system.world.get("npcs", {}).values())
-                    if len(current_npcs_for_menu) > 1:
-                        new_active_npc_ref = npc_selection_menu(screen, font, current_npcs_for_menu, current_active_npc_object_for_event) 
-                        if new_active_npc_ref and hasattr(new_active_npc_ref, 'name'): 
-                           active_npc = new_active_npc_ref
+                    if len(world_system.npcs_data) > 1:
+                        new_active_npc_name = npc_selection_menu(screen, font, list(world_system.npcs_data.values()), current_active_npc_object_for_event) 
+                        if new_active_npc_name and new_active_npc_name != active_npc_name:
+                           active_npc_name = new_active_npc_name
                            last_ai_result = "" 
-                           print(f"========= 目前關注的NPC: {active_npc.name} ==========")
+                           print(f"========= 目前關注的NPC: {active_npc_name} ==========")
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: 
-                    # Simplified: check button clicks and dispatch to same logic as keydown
-                    # This part would need the actual button rects and logic
+                    # Placeholder for button click logic
+                    # This needs to iterate button_rects and check collision
+                    # Then dispatch based on the 'key' of the button label
                     pass 
 
         # --- 2. 遊戲邏輯更新 (Game Logic / State Updates) ---
-        if "npcs" in world_system.world:
-            for npc_obj in world_system.world.get("npcs", {}).values():
+        if world_system.npcs_data:
+            for npc_obj in world_system.npcs_data.values():
                 if hasattr(npc_obj, 'position') and hasattr(npc_obj, 'display_pos'):
                      npc_obj.display_pos = [int(n) for n in npc_obj.position]
                 if hasattr(npc_obj, 'move_target') and npc_obj.move_target and hasattr(npc_obj, 'move_speed'):
@@ -755,7 +755,7 @@ def run_pygame_demo():
         win_w, win_h = screen.get_size()
         
         # 將 map_w, map_h 及相關縮放計算移入循環內部
-        current_spaces_for_map_bounds = list(world_system.world.get("spaces", {}).values())
+        current_spaces_for_map_bounds = list(world_system.spaces_data.values())
         map_w = max([s.display_pos[0]+s.display_size[0] for s in current_spaces_for_map_bounds if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [1200])
         map_h = max([s.display_pos[1]+s.display_size[1] for s in current_spaces_for_map_bounds if hasattr(s, 'display_pos') and hasattr(s, 'display_size') and s.display_pos and s.display_size] or [700])
 
@@ -774,9 +774,9 @@ def run_pygame_demo():
             text = info_font.render(line, True, (60, 60, 60))
             screen.blit(text, (16, 12 + i * 22))
         
-        # 畫空間 - 直接從 world_system.world 獲取
+        # 畫空間 - 直接從 world_system.spaces_data 獲取
         if "spaces" in world_system.world:
-            for space_obj in world_system.world.get("spaces", {}).values(): # Iterate directly
+            for space_obj in world_system.spaces_data.values(): # Iterate directly
                 if hasattr(space_obj, 'display_pos') and hasattr(space_obj, 'display_size') and space_obj.display_pos and space_obj.display_size:
                     px, py = space_obj.display_pos
                     sx, sy = space_obj.display_size
@@ -788,9 +788,9 @@ def run_pygame_demo():
                     text = font.render(space_obj.name, True, (40,40,40))
                     screen.blit(text, (rect.x+8, rect.y+8))
 
-        # 畫物品 - 直接從 world_system.world 獲取
+        # 畫物品 - 直接從 world_system.items_data 獲取
         if "items" in world_system.world:
-            for item_obj in world_system.world.get("items", {}).values(): # Iterate directly
+            for item_obj in world_system.items_data.values(): # Iterate directly
                 # 優先用 item.position，如果沒有則找所屬空間
                 ipos = None
                 if hasattr(item_obj, "position") and item_obj.position:
@@ -799,7 +799,7 @@ def run_pygame_demo():
                     # Try to find item in a space to determine its position if not explicitly set
                     # This part might need adjustment based on how item ownership by space is structured
                     if "spaces" in world_system.world:
-                        for space_obj_for_item_check in world_system.world.get("spaces", {}).values():
+                        for space_obj_for_item_check in world_system.spaces_data.values():
                             if hasattr(space_obj_for_item_check, 'items') and item_obj in space_obj_for_item_check.items: # Assuming space.items holds references
                                 if hasattr(space_obj_for_item_check, 'display_pos') and hasattr(space_obj_for_item_check, 'display_size'):                                    
                                     ipos = [
@@ -826,13 +826,13 @@ def run_pygame_demo():
                          screen.blit(font.render(item_obj.name[0] if item_obj.name else "?", True, (20,20,80)), text_rect)
                 # else: item has no position, cannot be drawn
 
-        # 畫 NPC - 直接從 world_system.world 獲取
+        # 畫 NPC - 直接從 world_system.npcs_data 獲取
         # Also, ensure active_npc is correctly referenced or re-fetched if it can change
         # For simplicity, this example assumes active_npc object reference stays valid if it's not None.
         # A more robust way would be to store active_npc_name and fetch the object each frame:
-        # active_npc_object_this_frame = world_system.world.get("npcs", {}).get(active_npc_name_if_stored) if active_npc_name_if_stored else None
+        # active_npc_object_this_frame = world_system.npcs_data.get(active_npc_name_if_stored) if active_npc_name_if_stored else None
         if "npcs" in world_system.world:
-            for npc_obj in world_system.world.get("npcs", {}).values(): # Iterate directly
+            for npc_obj in world_system.npcs_data.values(): # Iterate directly
                 if hasattr(npc_obj, 'display_pos') and npc_obj.display_pos and hasattr(npc_obj, 'radius'): # Ensure attributes exist
                     px, py = npc_obj.display_pos
                     draw_x = int(px * scale + offset_x)
@@ -849,7 +849,7 @@ def run_pygame_demo():
                     # 聊天氣泡（只顯示 active_npc 的最新 AI 回覆）
                     # Ensure active_npc itself is the up-to-date object if its state can change
                     # or compare by a unique ID/name if active_npc is a snapshot
-                    if active_npc and npc_obj.name == active_npc.name and (last_ai_result or ai_thinking): # Assuming name is unique and active_npc refers to a valid NPC object
+                    if active_npc_name and npc_obj.name == active_npc_name and (last_ai_result or ai_thinking): # Assuming name is unique and active_npc refers to a valid NPC object
                         bubble_font = info_font
                         bubble_content = last_ai_result if not ai_thinking else "AI 思考中..."
                         # Wrap text for bubble
