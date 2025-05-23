@@ -5,9 +5,7 @@ from typing import Union, Literal, List, Optional, Dict, Any, Tuple
 import json
 import os
 import glob
-import asyncio
 from dataclasses import dataclass, field as dataclass_field
-import heapq
 import random # Added import for random offset
 import math   # Added import for math functions (cos, sin, radians)
 
@@ -24,51 +22,6 @@ class Item(BaseModel):
 
 #NOTE: Space 空間 class
 # 對話事件資料結構
-class ConversationEvent(BaseModel):
-    priority: int = Field(..., description="事件優先級，數字越小優先處理")
-    timestamp: float = Field(..., description="事件產生的時間戳")
-    speaker: str = Field(..., description="發話者名稱")
-    target: str = Field(..., description="目標 NPC 名稱")
-    message: str = Field(..., description="對話內容")
-    extra: dict = Field(default_factory=dict, description="額外資訊")
-
-    def __lt__(self, other):
-        if not isinstance(other, ConversationEvent):
-            return NotImplemented
-        return (self.priority, self.timestamp) < (other.priority, other.timestamp)
-
-class ConversationManager(BaseModel):
-    space_name: str = Field(..., description="空間名稱")
-    queue: list = Field(default_factory=list, description="對話事件的優先佇列（heapq）")
-    
-    def __init__(self, **data):
-        super().__init__(**data)
-        self._lock = asyncio.Lock()
-        self._running = False
-
-    async def add_conversation(self, event: ConversationEvent):
-        async with self._lock:
-            heapq.heappush(self.queue, event)
-
-    async def run(self):
-        self._running = True
-        while self._running:
-            await asyncio.sleep(0)
-            event = None
-            async with self._lock:
-                if self.queue:
-                    event = heapq.heappop(self.queue)
-            if event:
-                await self.handle_event(event)
-            else:
-                await asyncio.sleep(0.05)
-
-    async def handle_event(self, event: ConversationEvent):
-        print(f"[Space: {self.space_name}] {event.speaker} 對 {event.target} 說: {event.message}")
-
-    def stop(self):
-        self._running = False
-
 class Space(BaseModel):
     name: str
     description: str
@@ -77,7 +30,6 @@ class Space(BaseModel):
     npcs: List["NPC"] = Field(default_factory=list)  # NPC will be a forward reference here
     display_pos: Tuple[int, int] = (0, 0)
     display_size: Tuple[int, int] = (0, 0)
-    conversation_manager: Optional[ConversationManager] = None # ConversationManager is defined above
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -188,13 +140,100 @@ class NPC(BaseModel):
             inventory_item_5: Optional[Literal[tuple(inventory_item_names_for_options)] if inventory_item_names_for_options else str] = Field(None, description="庫存中的第五個輔助物品名稱...")
             how_to_interact: str = Field(description="詳細描述如何與這些物品互動...")
 
+        class PlanningForTheDayAction(BaseModel):
+            action_type: Literal["planning_for_the_day"]
+            
+            reasoning_of_the_goal: str = Field(description="""
+            請詳細反思和分析你的計劃制定過程：
+            
+            1. **目標設定反思**：你想要在今天達成什麼主要目標？這些目標是否現實可行？
+            2. **優先順序分析**：哪些活動最重要？哪些可以延後？如何平衡不同需求？
+            3. **資源評估**：你目前擁有什麼資源（物品、技能、人際關係）來支持這些計劃？
+            4. **時間分配策略**：如何有效分配時間？是否留有彈性空間應對突發情況？
+            5. **過往經驗學習**：從之前的經驗中學到什麼？如何避免重複錯誤？
+            6. **環境考量**：當前環境和可用資源如何影響你的計劃？
+            7. **進度追蹤方式**：你打算如何檢查和調整計劃的執行情況？
+            
+            請詳細說明你的思考過程和計劃制定邏輯。
+            """)
+            
+            time_slot_1: str = Field(description="第1個時間段的具體時間（例如：'上午8:00-9:00'、'清晨'、'日出時分'等）")
+            activity_1: str = Field(description="第1個時間段要進行的具體活動，包括地點、使用的物品、互動的對象等詳細描述")
+            
+            time_slot_2: str = Field(description="第2個時間段的具體時間")
+            activity_2: str = Field(description="第2個時間段要進行的具體活動")
+            
+            time_slot_3: str = Field(description="第3個時間段的具體時間")
+            activity_3: str = Field(description="第3個時間段要進行的具體活動")
+            
+            time_slot_4: str = Field(description="第4個時間段的具體時間")
+            activity_4: str = Field(description="第4個時間段要進行的具體活動")
+            
+            time_slot_5: str = Field(description="第5個時間段的具體時間")
+            activity_5: str = Field(description="第5個時間段要進行的具體活動")
+            
+            time_slot_6: str = Field(description="第6個時間段的具體時間")
+            activity_6: str = Field(description="第6個時間段要進行的具體活動")
+            
+            time_slot_7: str = Field(description="第7個時間段的具體時間")
+            activity_7: str = Field(description="第7個時間段要進行的具體活動")
+            
+            time_slot_8: str = Field(description="第8個時間段的具體時間")
+            activity_8: str = Field(description="第8個時間段要進行的具體活動")
+            
+            time_slot_9: str = Field(description="第9個時間段的具體時間")
+            activity_9: str = Field(description="第9個時間段要進行的具體活動")
+            
+            time_slot_10: str = Field(description="第10個時間段的具體時間")
+            activity_10: str = Field(description="第10個時間段要進行的具體活動")
+            
+            time_slot_11: str = Field(description="第11個時間段的具體時間")
+            activity_11: str = Field(description="第11個時間段要進行的具體活動")
+            
+            time_slot_12: str = Field(description="第12個時間段的具體時間（例如：'晚上10:00-睡前'、'夜晚休息時光'等）")
+            activity_12: str = Field(description="第12個時間段要進行的具體活動，通常是一天的結束活動")
+
         class GeneralResponse(BaseModel):
-            self_talk_reasoning: str = Field(description="你對當前情況的思考和分析")
+            self_talk_reasoning: str = Field(description="""
+            請詳細分析你當前的處境和行為模式：
+            
+            1. **當前狀況評估**：你現在在哪裡？周圍有什麼人和物品？你的庫存狀態如何？
+            2. **行為模式反思**：回顧你最近幾次的行動，是否一直重複相同的行為？
+            3. **重複行為檢測**：如果你發現自己連續與同一個物品互動超過2-3次，請停止並轉向其他活動
+            4. **目標與動機**：思考你作為這個角色的目標和動機，什麼驅使你行動？
+            5. **環境機會**：觀察當前環境中有什麼新的互動機會或未探索的選項
+            6. **決策理由**：基於以上分析，解釋你接下來想要採取的行動及其原因
+            
+            請用第一人稱詳細表達你的思考過程，展現角色的個性和智慧。
+            """)
             action: Optional[Union[
                 EnterSpaceAction,
                 TalkToNPCAction,
-                InteractItemAction
-            ]] = Field(None, description="你想要執行的動作...")
+                InteractItemAction,
+                PlanningForTheDayAction
+            ]] = Field(None, description="""
+            選擇最適合當前情況的行動類型：
+            
+            📍 **EnterSpaceAction**: 當你想要移動到其他空間時使用
+            - 適用於：探索新區域、尋找特定人物或物品、改變環境
+            - 注意：只能移動到與當前空間直接連接的區域
+            
+            💬 **TalkToNPCAction**: 當你想要與其他NPC進行對話時使用  
+            - 適用於：獲取信息、社交互動、合作、交易、尋求幫助
+            - 注意：只能與當前空間內的其他NPC對話
+            
+            🔧 **InteractItemAction**: 當你想要與物品進行互動時使用
+            - 適用於：使用工具、製作物品、收集資源、檢查物品狀態
+            - 可以同時使用多個庫存物品輔助互動
+            - 注意：避免與同一物品重複互動
+            
+            📅 **PlanningForTheDayAction**: 當你想要制定或調整一天的計劃時使用
+            - 適用於：制定時間表、設定目標、規劃活動順序
+            - 幫助你更有條理地安排活動，避免漫無目的的行為
+            - 當你已經制定完計畫後，請去想辦法執行計劃，而非繼續制定計劃
+            
+            如果當前情況不需要採取具體行動（如純粹觀察、思考），可以將action設為None。
+            """)
         
         return GeneralResponse
 
@@ -275,6 +314,22 @@ class NPC(BaseModel):
                 result = self.move_to_space(action.target_space)
             elif action.action_type == "talk_to_npc":
                 result = self.talk_to_npc(action.target_npc, action.dialogue)
+            elif action.action_type == "planning_for_the_day":
+                # 構建計劃的詳細內容
+                plan_details = [
+                    f"計劃制定思考：{action.reasoning_of_the_goal}",
+                    "",
+                    "今日計劃時間表："
+                ]
+                
+                # 收集所有時間段和活動
+                for i in range(1, 13):
+                    time_slot = getattr(action, f'time_slot_{i}', '')
+                    activity = getattr(action, f'activity_{i}', '')
+                    if time_slot and activity:
+                        plan_details.append(f"{i:2d}. {time_slot}: {activity}")
+                
+                result = "已制定今日計劃，包含詳細的時間安排和活動規劃。"
             else:
                 result = f"Unknown action type: {action.action_type}"
         else:
@@ -288,6 +343,20 @@ class NPC(BaseModel):
                 memory += f"\n對 {action.target_npc} 說: {action.dialogue}"
             elif action.action_type == "enter_space":
                 memory += f"\n我要移動到 {action.target_space}"
+            elif action.action_type == "planning_for_the_day":
+                # 將詳細計劃加入到memory中
+                plan_summary = f"\n制定了今日計劃："
+                plan_summary += f"\n計劃思考：{action.reasoning_of_the_goal[:100]}..." if len(action.reasoning_of_the_goal) > 100 else f"\n計劃思考：{action.reasoning_of_the_goal}"
+                plan_summary += f"\n時間表安排："
+                
+                # 加入所有有內容的時間段
+                for i in range(1, 13):
+                    time_slot = getattr(action, f'time_slot_{i}', '')
+                    activity = getattr(action, f'activity_{i}', '')
+                    if time_slot and activity:
+                        plan_summary += f"\n  {time_slot}: {activity}"
+                
+                memory += plan_summary
         memory += f"\n結果: {result}"
         self.history.append({"role": "assistant", "content": memory})
         
@@ -306,24 +375,17 @@ class NPC(BaseModel):
             return f"Cannot find NPC '{target_npc_name}' in the current space."
         return f"{self.name} says to {target_npc_obj.name}: \"{dialogue}\""
 
-    async def async_talk_to_npc(self, target_npc_name: str, dialogue: str, priority: int = 10):
-        import time
-        event = ConversationEvent(
-            priority=priority, timestamp=time.time(),
-            speaker=self.name, target=target_npc_name, message=dialogue
-        )
-        if self.current_space.conversation_manager:
-            await self.current_space.conversation_manager.add_conversation(event)
-        else:
-            print(f"[警告] 空間 {self.current_space.name} 沒有對話管理器！")
 
 class AI_System(BaseModel):
     """
     系統 AI 負責解釋和處理 NPC AI 的互動意圖，
     並根據這些意圖修改世界狀態（創建/刪除物品、修改物品描述等）。
     """
-    time: str = "中午"
-    weather: str = "晴朗"
+    # 完善的時間系統
+    current_time: str = "上午8:00"      # 當前世界時間
+    world_day: int = 1                  # 世界天數
+    tick_count: int = 0                 # tick計數器
+    weather: str = "晴朗"               # 天氣狀態
     history: List[Dict[str, str]] = Field(default_factory=list)
     
     # 新的世界相關屬性
@@ -333,58 +395,102 @@ class AI_System(BaseModel):
     items_data: Dict[str, "Item"] = Field(default_factory=dict)    # Forward reference for Item
     npcs_data: Dict[str, "NPC"] = Field(default_factory=dict)      # Forward reference for NPC
 
-    # 注意：以下這些類級別的 schema 定義現在主要作為一個「藍本」或「原始描述的來源」。
-    # 實際在 process_interaction 中傳給 LLM 的 schema 將是 update_schema 方法內部重新定義並返回的那個。
-    # 這樣做是為了完全遵循您 NPC.update_schema 的模式。
+    def advance_time(self) -> str:
+        """
+        推進世界時間10分鐘，並返回新的時間字符串
+        
+        Returns:
+            str: 格式化的時間消息
+        """
+        self.tick_count += 1
+        
+        # 解析當前時間
+        time_str = self.current_time
+        try:
+            # 移除中文前綴，解析時間
+            if "上午" in time_str:
+                time_part = time_str.replace("上午", "")
+                hour, minute = map(int, time_part.split(":"))
+                is_pm = False
+            elif "下午" in time_str:
+                time_part = time_str.replace("下午", "")
+                hour, minute = map(int, time_part.split(":"))
+                if hour != 12:  # 下午12點就是中午12點，不需要+12
+                    hour += 12
+                is_pm = True
+            elif "中午" in time_str:
+                time_part = time_str.replace("中午", "")
+                hour, minute = map(int, time_part.split(":"))
+                is_pm = True
+            elif "晚上" in time_str:
+                time_part = time_str.replace("晚上", "")
+                hour, minute = map(int, time_part.split(":"))
+                if hour != 12:
+                    hour += 12
+                is_pm = True
+            else:
+                # 如果沒有前綴，默認按24小時制解析
+                hour, minute = map(int, time_str.split(":"))
+                is_pm = hour >= 12
+                
+        except (ValueError, AttributeError):
+            # 如果解析失敗，重置為默認時間
+            hour, minute = 8, 0
+            is_pm = False
+            
+        # 增加10分鐘
+        minute += 10
+        if minute >= 60:
+            minute -= 60
+            hour += 1
+            
+        # 處理日期變更
+        if hour >= 24:
+            hour -= 24
+            self.world_day += 1
+            
+        # 格式化新時間
+        if hour == 0:
+            formatted_time = f"深夜{hour:02d}:{minute:02d}"
+        elif hour < 6:
+            formatted_time = f"深夜{hour:02d}:{minute:02d}"
+        elif hour < 12:
+            formatted_time = f"上午{hour:02d}:{minute:02d}"
+        elif hour == 12:
+            formatted_time = f"中午{hour:02d}:{minute:02d}"
+        elif hour < 18:
+            formatted_time = f"下午{hour-12:02d}:{minute:02d}"
+        else:
+            formatted_time = f"晚上{hour-12:02d}:{minute:02d}"
+            
+        self.current_time = formatted_time
+        
+        # 返回時間更新消息
+        day_info = f"第{self.world_day}天" if self.world_day > 1 else "今天"
+        return f"時間流逝了10分鐘，現在是{day_info}{self.current_time}，天氣：{self.weather}。"
 
-    class ModifyWorldItemsFunction(BaseModel):
-        function_type: Literal["modify_world_items"] = Field("modify_world_items", description="固定值，表示這是一個通用的物品修改功能。")
-        delete_item_1: Optional[str] = Field(None, description="要刪除的第一個物品的名稱。例如：在烹飪時，這可能是「生雞肉」。如果本次操作不刪除任何物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
-        delete_item_2: Optional[str] = Field(None, description="要刪除的第二個物品的名稱。例如：烹飪時decyd的「蔬菜」。如果本次操作不刪除超過一個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
-        delete_item_3: Optional[str] = Field(None, description="要刪除的第三個物品的名稱。例如：製作藥水時的「藥草A」。如果本次操作不刪除超過兩個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
-        delete_item_4: Optional[str] = Field(None, description="要刪除的第四個物品的名稱。例如：製作複雜裝置時的「零件X」。如果本次操作不刪除超過三個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
-        delete_item_5: Optional[str] = Field(None, description="要刪除的第五個物品的名稱。例如：獻祭儀式中消耗的「魔法水晶」。如果本次操作不刪除超過四個物品或不使用此欄位，請保持為 None。物品必須是本次互動明確涉及的物品之一。")
-        create_item_1_name: Optional[str] = Field(None, description="要創建的第一個新物品的名稱。例如：「香煎雞排」。如果本次操作不創建任何物品或不使用此欄位，請保持為 None。")
-        create_item_1_description: Optional[str] = Field(None, description="第一個新物品的詳細描述。必須提供如果 create_item_1_name 被指定。例如：「一塊用香料精心烹製，外皮金黃酥脆、肉質鮮嫩多汁的雞排。」")
-        create_item_2_name: Optional[str] = Field(None, description="要創建的第二個新物品的名稱。例如：「蔬菜沙拉」。")
-        create_item_2_description: Optional[str] = Field(None, description="第二個新物品的詳細描述。例如：「一份由新鮮生菜、番茄、小黃瓜和橄欖組成的清爽沙拉，淋上了特製油醋汁。」")
-        create_item_3_name: Optional[str] = Field(None, description="要創建的第三個新物品的名稱。例如：「治療藥水」。")
-        create_item_3_description: Optional[str] = Field(None, description="第三個新物品的詳細描述。例如：「一瓶散發著淡淡草藥香氣的紅色藥水，據說能迅速治癒傷口。」")
-        create_item_4_name: Optional[str] = Field(None, description="要創建的第四個新物品的名稱。例如：「木柴捆」。")
-        create_item_4_description: Optional[str] = Field(None, description="第四個新物品的詳細描述。例如：「一捆由砍伐樹木得到的乾燥木柴，適合用作燃料。」")
-        create_item_5_name: Optional[str] = Field(None, description="要創建的第五個新物品的名稱。例如：「精緻的木雕」。")
-        create_item_5_description: Optional[str] = Field(None, description="第五個新物品的詳細描述。例如：「一個用優質木材精心雕刻而成的小鳥擺飾，栩栩如生。」")
-        # 這裡可以保留 ModifyWorldItemsFunction 的完整描述文字和範例，例如：
-        # "這是一個高度通用的物品操作功能..." (內容同前一個版本)
-        model_config = {"title": "AI_System_ModifyWorldItemsFunction_Static"} # 區分類名
+    def get_time_message(self) -> str:
+        """
+        獲取當前時間的描述消息
+        
+        Returns:
+            str: 當前時間描述
+        """
+        day_info = f"第{self.world_day}天" if self.world_day > 1 else "今天"
+        return f"現在是{day_info}{self.current_time}，天氣：{self.weather}。"
 
-    class ChangeItemDescriptionFunction(BaseModel):
-        function_type: Literal["change_item_description"] = Field("change_item_description", description="固定值，表示這是一個修改物品描述的功能。")
-        item_name: str = Field(description="要修改描述的物品名稱。用於物品狀態變化但不需要創建新物品時，例如：物品被使用後狀態改變、物品被修理或損壞。此物品必須是 NPC 正在互動的物品之一。")
-        new_description: str = Field(description="物品的新描述，反映其當前狀態。例如：「杯子裡現在裝滿了水」或「手機屏幕有了裂痕」。")
-        model_config = {"title": "AI_System_ChangeItemDescriptionFunction_Static"}
-
-    class MoveItemToInventoryFunction(BaseModel):
-        function_type: Literal["move_item_to_inventory"] = Field("move_item_to_inventory", description="固定值，表示這是一個將物品從空間移動到 NPC 庫存的功能。")
-        item_name: str = Field(description="要移動到 NPC 庫存的物品名稱。用於 NPC 撿起或收集空間中的物品時，例如：撿起地上的鑰匙、從桌上拿起書本。此物品必須是 NPC 正在互動的目標物品(target_item)且位於空間中。")
-        model_config = {"title": "AI_System_MoveItemToInventoryFunction_Static"}
-
-    class MoveItemFromInventoryToSpaceFunction(BaseModel):
-        function_type: Literal["move_item_from_inventory_to_space"] = Field("move_item_from_inventory_to_space", description="固定值，表示這是一個將物品從 NPC 庫存移動到空間的功能。")
-        item_name: str = Field(description="要從 NPC 庫存中取出並放置到空間的物品名稱。用於 NPC 將物品從庫存中拿出並放置在當前空間時，例如：放下背包、擺放物品。此物品必須是 NPC 庫存中的物品之一。")
-        model_config = {"title": "AI_System_MoveItemFromInventoryToSpaceFunction_Static"}
-
-    class GeneralResponse(BaseModel):
-        reasoning: str = Field(description="...") # 描述同前
-        function: Optional[Union[
-            "AI_System.ModifyWorldItemsFunction", # 指向類級別的定義以獲取聯合類型提示
-            "AI_System.ChangeItemDescriptionFunction",
-            "AI_System.MoveItemToInventoryFunction",
-            "AI_System.MoveItemFromInventoryToSpaceFunction"
-        ]] = Field(None, description="...") # 描述同前
-        response_to_AI: str = Field(description="...") # 描述同前
-        model_config = {"title": "AI_System_GeneralResponse_Static"}
-
+    def initialize_world(self, world: Dict[str, Any]):
+        """
+        初始化世界數據，將世界數據轉換為 AI_System 的屬性。
+        
+        Args:
+            world: 包含世界數據的字典
+        """
+        self.world_name_str = world.get("world_name", "未知世界")
+        self.world_description_str = world.get("description", "")
+        self.spaces_data = {space_name: Space(**space_data) for space_name, space_data in world["spaces_data"].items()}
+        self.items_data = {item_name: Item(**item_data) for item_name, item_data in world["items_data"].items()}
+        self.npcs_data = {npc_name: NPC(**npc_data) for npc_name, npc_data in world["npcs_data"].items()}
 
     def update_schema(self, available_items_for_interaction: List[str], npc_complete_inventory: List[str]):
         """
@@ -591,7 +697,7 @@ class AI_System(BaseModel):
             f"主要目標物品詳細資訊：'{target_item_object.name}' (描述：'{target_item_object.description}', 屬性：{target_item_object.properties})."
         ]
         context_lines.extend(inventory_items_info_lines) # 加入使用的庫存物品資訊 (如果有的話)
-        context_lines.append(f"目前世界時間：{self.time}, 天氣：{self.weather}.")
+        context_lines.append(f"目前世界時間：{self.current_time}, 天氣：{self.weather}.")
         # 移除了NPC完整物品庫的列表，因為 schema 的 Literal 已經處理了選擇範圍。
         # 但仍然告知 LLM 本次互動明確涉及的物品，有助於它理解 why 這些物品會出現在 Literal 中。
         context_lines.append(f"本次互動明確涉及的物品有：{', '.join(available_items_for_interaction) if available_items_for_interaction else '無明確目標物品 (可能為純粹的環境互動或無物品技能)' }。請確保你的功能選擇 (如刪除物品) 嚴格基於這些明確涉及的物品。")
@@ -809,18 +915,14 @@ class AI_System(BaseModel):
                     continue
 
                 # 創建新 Item 物件
-                # 注意：Item 類的定義需要在 AI_System 之前，或者使用 Forward Reference "Item"
+                # Item 類已經在同一個文件中定義
                 try:
-                    # 假設 Item 類已正確導入或定義
-                    from . import Item # 或者根據您的專案結構調整導入
                     new_item = Item(
                         name=item_name_to_create,
                         description=item_description,
                         properties={}, # 可以根據需要從 LLM 的 reasoning 或其他地方獲取 properties
                         # position 和 size 通常在創建時不指定，或由特定邏輯處理
                     )
-                except ImportError:
-                     return "系統內部錯誤：無法找到 Item 類定義。"
                 except Exception as e:
                     return f"系統內部錯誤：創建 Item 物件 '{item_name_to_create}' 時失敗: {e}"
 
@@ -888,7 +990,7 @@ class AI_System(BaseModel):
             return msg # 或者可以選擇僅記錄警告，並告知 NPC 未發生任何事
 
         # 從全局物品列表 self.items_data 中找到該物品
-        if "items" in self.items_data and item_name_to_change in self.items_data:
+        if item_name_to_change in self.items_data:
             item_object_to_modify = self.items_data[item_name_to_change]
             
             old_description = item_object_to_modify.description
@@ -1101,7 +1203,6 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
             npcs = [],  # 後續添加 NPC
             display_pos = tuple(space_data["space_positions"]),
             display_size = tuple(space_data["space_size"]),
-            conversation_manager = ConversationManager(space_name=space_data["name"])
         )
     
     # 第二步: 創建所有物品
@@ -1249,12 +1350,12 @@ def select_world():
     print(f"Loading world: {selected_world}")
     return os.path.join("worlds", selected_world)
 
-def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
+def save_world_to_json(world_system_instance: "AI_System", file_path: str) -> bool:
     """
-    將當前世界狀態保存到 JSON 文件。
+    從 AI_System 實例中提取數據並保存到 JSON 文件。
     
     Args:
-        world: 包含世界對象的字典
+        world_system_instance: AI_System 的實例，包含所有世界數據
         file_path: 保存 JSON 文件的路徑
         
     Returns:
@@ -1263,41 +1364,45 @@ def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
     try:
         # 創建一個字典來保存序列化的世界數據
         world_data = {
-            "world_name": world.get("world_name", "未知世界"),
-            "description": world.get("description", ""),
+            "world_name": world_system_instance.world_name_str,
+            "description": world_system_instance.world_description_str,
             "spaces": [],
             "items": [],
             "npcs": []
         }
         
         # 序列化空間
-        for space_name, space in world["spaces"].items():
+        for space_name, space in world_system_instance.spaces_data.items():
             space_data = {
                 "name": space.name,
                 "description": space.description,
                 "connected_spaces": [connected.name for connected in space.connected_spaces],
-                "items": [item.name for item in space.items]
-                # NPC 單獨處理
+                "items": [item.name for item in space.items],
+                "space_positions": list(space.display_pos),  # 轉換 tuple 為 list
+                "space_size": list(space.display_size)       # 轉換 tuple 為 list
             }
             world_data["spaces"].append(space_data)
         
-        # 序列化物品 - 簡化版本，不包含 interactions
-        for item_name, item in world["items"].items():
+        # 序列化物品 - 需要收集所有物品（包括在空間中和NPC庫存中的）
+        for item_name, item in world_system_instance.items_data.items():
             item_data = {
                 "name": item.name,
                 "description": item.description,
-                "properties": item.properties
+                "properties": item.properties,
+                "position": list(item.position) if item.position else [0, 0],  # 確保有位置
+                "size": list(item.size) if item.size else [30, 30]             # 確保有大小
             }
             world_data["items"].append(item_data)
         
         # 序列化 NPC
-        for npc_name, npc in world["npcs"].items():
+        for npc_name, npc in world_system_instance.npcs_data.items():
             npc_data = {
                 "name": npc.name,
                 "description": npc.description,
                 "starting_space": npc.current_space.name,
                 "inventory": [item.name for item in npc.inventory.items],
-                "history": npc.history  # 保存 NPC 的記憶/歷史記錄
+                "history": npc.history,  # 保存 NPC 的記憶/歷史記錄
+                "position": list(npc.position) if npc.position else None
             }
             world_data["npcs"].append(npc_data)
         
@@ -1383,7 +1488,7 @@ def SandBox():
             if user_input == "e":
                 # 退出前提示保存
                 save_path = prompt_for_save_location(world_file_path)
-                save_world_to_json(world, save_path)
+                save_world_to_json(world_system, save_path)
                 print("正在退出...")
                 break
             elif user_input == "i":
@@ -1434,7 +1539,7 @@ def SandBox():
             elif user_input == "e":
                 # 退出前提示保存
                 save_path = prompt_for_save_location(world_file_path)
-                save_world_to_json(world, save_path)
+                save_world_to_json(world_system, save_path)
                 print("正在退出...")
                 break
 

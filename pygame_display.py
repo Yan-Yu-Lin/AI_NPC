@@ -7,6 +7,68 @@ import os
 from backend import save_world_to_json, world_system
 from typing import Optional
 
+# 添加terminal input相關的全域變數
+terminal_command = None
+terminal_command_lock = threading.Lock()
+
+def print_npc_history_to_terminal(npc_name: str):
+    """在terminal中打印指定NPC的完整history"""
+    if not npc_name or npc_name not in world_system.npcs_data:
+        print(f"\n[錯誤] 找不到名為 '{npc_name}' 的NPC")
+        return
+    
+    npc = world_system.npcs_data[npc_name]
+    history = npc.history
+    
+    print(f"\n{'='*60}")
+    print(f"🤖 {npc.name} 的完整History")
+    print(f"{'='*60}")
+    print(f"總共 {len(history)} 條記錄")
+    print("-" * 60)
+    
+    for i, message in enumerate(history, 1):
+        role = message.get('role', 'Unknown')
+        content = message.get('content', '')
+        
+        # 根據role設定顯示樣式
+        if role == "system":
+            print(f"[{i:3d}] 🔧 系統: {content}")
+        elif role == "assistant":
+            print(f"[{i:3d}] 🤖 {npc.name}: {content}")
+        elif role == "user":
+            print(f"[{i:3d}] 👤 用戶: {content}")
+        else:
+            print(f"[{i:3d}] ❓ {role}: {content}")
+        print("-" * 60)
+    
+    print(f"{'='*60}")
+    print(f"History 結束 - 總共 {len(history)} 條記錄")
+    print(f"{'='*60}\n")
+
+def terminal_input_listener():
+    """在背景執行的terminal input監聽器"""
+    global terminal_command
+    print("🎮 Terminal輸入監聽器啟動")
+    print("💡 可用指令:")
+    print("   p <npc_name> - 顯示指定NPC的history")
+    print("   p - 顯示當前active NPC的history") 
+    print("   quit - 結束程式")
+    print("-" * 50)
+    
+    while True:
+        try:
+            user_input = input("Terminal> ").strip()
+            if user_input:
+                with terminal_command_lock:
+                    terminal_command = user_input
+                    
+                if user_input.lower() == 'quit':
+                    break
+        except (EOFError, KeyboardInterrupt):
+            break
+    
+    print("🎮 Terminal輸入監聽器結束")
+
 def run_pygame_demo():
     pygame.init()
     # 使用 RESIZABLE 讓視窗可調整大小
@@ -18,6 +80,12 @@ def run_pygame_demo():
     clock = pygame.time.Clock()
     running = True
 
+    # 🎮 啟動terminal input監聽線程
+    global terminal_command
+    terminal_thread = threading.Thread(target=terminal_input_listener, daemon=True)
+    terminal_thread.start()
+    print("✅ Terminal監聽線程已啟動，可以在console輸入指令")
+
     # 功能說明
     info_lines = [
         "【功能說明】",
@@ -25,6 +93,7 @@ def run_pygame_demo():
         "2. 地圖、空間、物品、NPC 會自動根據 json 內容繪製",
         "3. 支援視窗拖拉、最大化，畫面自動縮放",
         "4. 關閉視窗即結束程式",
+        "5. 🆕 可在terminal輸入 'p' 查看NPC history",
         "",
         "（如需互動、點擊、移動等功能可再擴充）"
     ]
@@ -188,7 +257,7 @@ def run_pygame_demo():
         
         # 處理選擇
         if menu_items[selected] == "直接存檔":
-            save_world_to_json(world, original_path)
+            save_world_to_json(world_system, original_path)
         elif menu_items[selected] == "另存新檔":
             input_rect = pygame.Rect(100, 320, 400, 50)
             import os
@@ -198,7 +267,7 @@ def run_pygame_demo():
                 if not filename.lower().endswith('.json'):
                     filename += ".json"
                 new_path = os.path.join("worlds", filename)
-                save_world_to_json(world, new_path)
+                save_world_to_json(world_system, new_path)
         # 取消則不做事
 
     def npc_selection_menu(screen, font, npcs, active_npc):
@@ -717,7 +786,7 @@ def run_pygame_demo():
                     if current_active_npc_object_for_event:
                         history_menu(screen, font, current_active_npc_object_for_event)
                 elif event.key == pygame.K_s: 
-                    save_menu(screen, font, world_system.world.get('_file_path', "worlds/default_save.json"))
+                    save_menu(screen, font, "worlds/default_save.json")
                 elif event.key == pygame.K_n: 
                     if len(world_system.npcs_data) > 1:
                         new_active_npc_name = npc_selection_menu(screen, font, list(world_system.npcs_data.values()), current_active_npc_object_for_event) 
@@ -732,6 +801,40 @@ def run_pygame_demo():
                     # This needs to iterate button_rects and check collision
                     # Then dispatch based on the 'key' of the button label
                     pass 
+
+        # 🎮 檢查並處理terminal命令
+        global terminal_command
+        current_terminal_command = None
+        with terminal_command_lock:
+            if terminal_command:
+                current_terminal_command = terminal_command
+                terminal_command = None  # 清除命令
+
+        if current_terminal_command:
+            cmd_parts = current_terminal_command.split()
+            if len(cmd_parts) >= 1:
+                cmd = cmd_parts[0].lower()
+                
+                if cmd == 'p':
+                    # 處理 'p' 命令
+                    if len(cmd_parts) >= 2:
+                        # 指定NPC名稱: p <npc_name>
+                        npc_name = ' '.join(cmd_parts[1:])  # 支援有空格的NPC名稱
+                        print_npc_history_to_terminal(npc_name)
+                    elif active_npc_name:
+                        # 沒指定NPC，使用當前active NPC: p
+                        print_npc_history_to_terminal(active_npc_name)
+                    else:
+                        print("\n[錯誤] 沒有active NPC，請指定NPC名稱: p <npc_name>")
+                        print(f"可用的NPC: {', '.join(world_system.npcs_data.keys())}")
+                
+                elif cmd == 'quit':
+                    print("🛑 收到quit命令，正在關閉程式...")
+                    running = False
+                
+                else:
+                    print(f"\n[警告] 未知命令: '{current_terminal_command}'")
+                    print("可用命令: p [npc_name], quit")
 
         # --- 2. 遊戲邏輯更新 (Game Logic / State Updates) ---
         if world_system.npcs_data:
@@ -775,7 +878,7 @@ def run_pygame_demo():
             screen.blit(text, (16, 12 + i * 22))
         
         # 畫空間 - 直接從 world_system.spaces_data 獲取
-        if "spaces" in world_system.world:
+        if world_system.spaces_data:
             for space_obj in world_system.spaces_data.values(): # Iterate directly
                 if hasattr(space_obj, 'display_pos') and hasattr(space_obj, 'display_size') and space_obj.display_pos and space_obj.display_size:
                     px, py = space_obj.display_pos
@@ -789,7 +892,7 @@ def run_pygame_demo():
                     screen.blit(text, (rect.x+8, rect.y+8))
 
         # 畫物品 - 直接從 world_system.items_data 獲取
-        if "items" in world_system.world:
+        if world_system.items_data:
             for item_obj in world_system.items_data.values(): # Iterate directly
                 # 優先用 item.position，如果沒有則找所屬空間
                 ipos = None
@@ -798,7 +901,7 @@ def run_pygame_demo():
                 else:
                     # Try to find item in a space to determine its position if not explicitly set
                     # This part might need adjustment based on how item ownership by space is structured
-                    if "spaces" in world_system.world:
+                    if world_system.spaces_data:
                         for space_obj_for_item_check in world_system.spaces_data.values():
                             if hasattr(space_obj_for_item_check, 'items') and item_obj in space_obj_for_item_check.items: # Assuming space.items holds references
                                 if hasattr(space_obj_for_item_check, 'display_pos') and hasattr(space_obj_for_item_check, 'display_size'):                                    
@@ -831,14 +934,14 @@ def run_pygame_demo():
         # For simplicity, this example assumes active_npc object reference stays valid if it's not None.
         # A more robust way would be to store active_npc_name and fetch the object each frame:
         # active_npc_object_this_frame = world_system.npcs_data.get(active_npc_name_if_stored) if active_npc_name_if_stored else None
-        if "npcs" in world_system.world:
+        if world_system.npcs_data:
             for npc_obj in world_system.npcs_data.values(): # Iterate directly
                 if hasattr(npc_obj, 'display_pos') and npc_obj.display_pos and hasattr(npc_obj, 'radius'): # Ensure attributes exist
                     px, py = npc_obj.display_pos
                     draw_x = int(px * scale + offset_x)
                     draw_y = int(py * scale + offset_y)
-                    color = getattr(npc_obj, 'display_color', (255,0,0)) # Default color
-                    radius = npc_obj.radius
+                    color = getattr(npc_obj, 'display_color', (255,0,0)) or (255,0,0)  # Default color, handle None case
+                    radius = getattr(npc_obj, 'radius', 24) or 24  # Default radius 24, handle None case
 
                     pygame.draw.circle(screen, color, (draw_x, draw_y), int(radius * scale))
                     npc_text = font.render(npc_obj.name, True, (0,0,0))
