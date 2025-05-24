@@ -584,6 +584,7 @@
       "name": "arthur",
       "description": "一位好奇且思考深入的探險家，對發掘故事和謎團有濃厚興趣。",
       "starting_space": "living_room",
+      "direction": "left",
       "inventory": [],
       "history": [
         {
@@ -600,6 +601,7 @@
       "name": "neo",
       "description": "一位聰明的研究生，對任何新知識都非常感興趣。",
       "starting_space": "kitchen",
+      "direction": "left",
       "inventory": [],
       "history": [
         {
@@ -616,6 +618,7 @@
       "name": "alex",
       "description": "你是一個膽小的廚師助理，對廚藝有著深厚的了解。",
       "starting_space": "corridor",
+      "direction": "right",
       "inventory": [],
       "history": [
         {

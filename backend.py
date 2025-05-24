@@ -17,6 +17,10 @@ def get_picture_dir():
     """Returns the absolute path to the 'worlds/picture' directory."""
     return os.path.join("worlds", "picture")
 
+def get_npc_image_dir():
+    """Returns the absolute path to the 'worlds/images' directory for NPC images."""
+    return os.path.join("worlds", "images")
+
 # 設定全局變量使 NPC 類可以訪問
 world_system = None
 
@@ -460,18 +464,16 @@ class NPC(BaseModel):
     is_thinking: bool = False
     thinking_status: str = ""
     action_status: str = ""
-
     path_to_follow: List[str] = Field(default_factory=list)
     current_path_segment_target_space_name: Optional[str] = None
     home_space_name: Optional[str] = None
-
-    # 新增用於避讓物品的欄位
     original_move_target: Optional[List[float]] = None
-    avoiding_item_name: Optional[str] = None # 假設用物品名稱作為ID
-    
-    # 新增：用於路徑規劃的欄位
+    avoiding_item_name: Optional[str] = None
     path_planner: Optional["PathPlanner"] = None
     current_path_points: List[Tuple[float, float]] = Field(default_factory=list)
+    image_path: Optional[str] = None  # 新增：NPC 圖片路徑
+    image_scale: float = 1.0  # 新增：NPC 圖片縮放比例
+    direction: str = ""  # 新增：NPC 初始朝向
 
     # ForwardRef必須在模型定義之後更新
     # Space.model_rebuild() # 這行通常在所有模型定義後執行
@@ -1335,9 +1337,12 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
                 radius = npc_data.get("radius", 15),
                 is_thinking = npc_data.get("is_thinking", False),
                 first_tick = npc_data.get("first_tick", True),
-                home_space_name = npc_data.get("home_space_name"), # 新增讀取 home_space_name
-                original_move_target = [float(p) for p in npc_data.get("move_target")] if npc_data.get("move_target") else None, # 確保 original_move_target 是 float 列表
-                avoiding_item_name = npc_data.get("avoiding_item_name") # 新增讀取 avoiding_item_name
+                home_space_name = npc_data.get("home_space_name"),
+                original_move_target = [float(p) for p in npc_data.get("move_target")] if npc_data.get("move_target") else None,
+                avoiding_item_name = npc_data.get("avoiding_item_name"),
+                image_path = npc_data.get("image_path"),
+                image_scale = npc_data.get("image_scale", 1.0),
+                direction = npc_data.get("direction", "right")  # 新增：讀取 direction
             )
 
             # 將 NPC 添加到其起始空間
@@ -1350,7 +1355,7 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
     spaces = list(spaces_dict.values())
     npcs = list(npcs_dict.values())
     items = list(items_dict.values())
-    
+
     # --- Modified Image Handling Logic ---
     picture_dir_path = get_picture_dir()
     os.makedirs(picture_dir_path, exist_ok=True) # Ensure picture directory exists
@@ -1388,11 +1393,15 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
         else:
             item.image_path = None # No name, no image path
 
-        # 3. Image generation call REMOVED. 
-        #    pygame_display.py will now handle generation if item.image_path is set but file doesn't exist.
-        #    If item.image_path is None, pygame_display will use a placeholder.
-
-    # --- End Modified Image Handling Logic ---
+    # 處理 NPC 圖片路徑
+    for npc in npcs:
+        if not npc.image_path:
+            # 生成預設的圖片路徑
+            npc.image_path = f"{npc.name.lower().replace(' ', '_')}.png"
+        # 存儲確定的檔案名
+        npc_data = next((n for n in world_data.get("npcs", []) if n["name"] == npc.name), None)
+        if npc_data:
+            npc_data["image_path_determined"] = npc.image_path
 
     return {
         "world_name": world_data.get("world_name", "未知世界"),
@@ -1533,7 +1542,9 @@ def save_world_to_json(world: Dict[str, Any], file_path: str) -> bool:
                 "first_tick": npc.first_tick,  # 保存 NPC 是否是第一次 tick
                 "home_space_name": npc.home_space_name,  # 新增保存 home_space_name
                 "original_move_target": npc.original_move_target,  # 新增保存 original_move_target
-                "avoiding_item_name": npc.avoiding_item_name  # 新增保存 avoiding_item_name
+                "avoiding_item_name": npc.avoiding_item_name,  # 新增保存 avoiding_item_name
+                "image_path": npc.image_path, # 新增保存 image_path
+                "image_scale": npc.image_scale # 新增保存 image_scale
             }
             world_data["npcs"].append(npc_data)
 

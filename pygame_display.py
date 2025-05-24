@@ -18,6 +18,8 @@ item_image_cache = {}
 def generate_image(prompt_text: str, output_filename: str):
     """Generates an image based on the prompt and saves it."""
     try:
+        # 確保目錄存在
+        os.makedirs(os.path.dirname(output_filename), exist_ok=True)
         # NOTE: "gpt-image-1" and "background" are non-standard from user's script.
         # If API errors occur, these might need to be changed to "dall-e-3"
         # and background transparency handled via prompt or post-processing.
@@ -2255,9 +2257,7 @@ def run_pygame_demo(world):
             px, py = npc.display_pos
             draw_x = int(px * scale + final_draw_offset_x)
             draw_y = int(py * scale + final_draw_offset_y)
-            pygame.draw.circle(screen, npc.display_color, (draw_x, draw_y), int(npc.radius * scale))
-            npc_text = font.render(npc.name, True, (0,0,0))
-            screen.blit(npc_text, (draw_x-16, draw_y-int(npc.radius*scale)-10))
+            draw_npc(screen, npc, (draw_x, draw_y), scale, 0, 0, font)
             
             # 顯示 NPC 碰撞邊緣
             if show_collision_areas:
@@ -2271,7 +2271,7 @@ def run_pygame_demo(world):
                 collision_surface.fill(NPC_COLLISION_COLOR)
                 pygame.draw.rect(collision_surface, (0, 0, 255, 180), collision_surface.get_rect(), 3)  # 藍色邊框
                 screen.blit(collision_surface, npc_collision_rect.topleft)
-                
+            
             # 聊天氣泡 - 移到循環內部，確保每個 NPC 都有氣泡
             bubble_font = info_font
             
@@ -2407,7 +2407,7 @@ def run_pygame_demo(world):
             screen.blit(bubble_surface, (bubble_rect.x, bubble_rect.y))
             pygame.draw.rect(screen, (0, 0, 0), bubble_rect, width=2, border_radius=10)
             screen.blit(bubble_text, (bubble_rect.x + 10, bubble_rect.y + 10))
-            
+
             # 為當前活動NPC添加指示標記
             if npc == active_npc:
                 active_marker_rect = pygame.Rect(
@@ -2456,4 +2456,90 @@ def run_pygame_demo(world):
             pygame.draw.rect(surface, border_color, surface.get_rect(), 3)
             
         return surface
+
+def load_npc_image(image_path):
+    """
+    載入 NPC 圖片，如果圖片不存在則生成新的圖片。
+    使用與物品圖片相同的生成邏輯。
+    """
+    try:
+        # 直接用相對於執行目錄的 worlds/images
+        image_dir = os.path.join("worlds", "images")
+        os.makedirs(image_dir, exist_ok=True)
+        full_path = os.path.join(image_dir, image_path)
+        
+        # 如果圖片不存在，生成新的圖片
+        if not os.path.exists(full_path):
+            # 從圖片路徑中提取 NPC 名稱
+            npc_name = os.path.splitext(image_path)[0]
+            # 構建提示詞
+            prompt = f"Generate a detailed image of an NPC named {npc_name}. The image should be suitable for a game character, with a clear and distinct appearance."
+            # 生成圖片
+            generate_image(prompt, full_path)
+        
+        # 載入圖片
+        image = pygame.image.load(full_path)
+        return image
+    except Exception as e:
+        print(f"Error loading NPC image: {e}")
+        return None
+
+def draw_npc(screen, npc, pos, scale, offset_x, offset_y, font):
+    """
+    繪製 NPC，支援圖片顯示。
+    """
+    x, y = pos
+    x += offset_x
+    y += offset_y
+    # 記錄上一幀 x 位置，並根據移動自動更新 npc.direction
+    if not hasattr(npc, '_last_draw_x'):
+        npc._last_draw_x = x
+
+    if hasattr(npc, 'image_path') and npc.image_path:
+        try:
+            # 構建完整的圖片路徑
+            image_dir = os.path.join("worlds", "images")
+            full_path = os.path.join(image_dir, npc.image_path)
+            
+            # 如果圖片不存在，生成新的圖片
+            if not os.path.exists(full_path):
+                # 從圖片路徑中提取 NPC 名稱
+                npc_name = os.path.splitext(npc.image_path)[0]
+                # 構建提示詞
+                prompt = f"Generate a detailed image of an NPC named {npc_name}. The image should be suitable for a game character, with a clear and distinct appearance."
+                # 生成圖片
+                generate_image(prompt, full_path)
+            
+            # 載入圖片
+            image = pygame.image.load(full_path)
+            # 使用 NPC 的 image_scale 或預設值
+            image_scale = getattr(npc, 'image_scale', 1.0)
+            # 計算圖片大小
+            image_size = int(70 * scale * image_scale)  # 基礎大小為 70
+            # 縮放圖片
+            scaled_image = pygame.transform.scale(image, (image_size, image_size))
+            # 根據方向決定是否鏡像
+            image_facing = getattr(npc, 'direction')
+            if x > npc._last_draw_x and image_facing == 'left':
+                scaled_image = pygame.transform.flip(scaled_image, True, False)
+                image_facing = 'right'
+            elif x < npc._last_draw_x and image_facing == 'right':
+                scaled_image = pygame.transform.flip(scaled_image, True, False)
+                image_facing = 'left'
+            npc._last_draw_x = x
+            screen.blit(scaled_image, (x - image_size//2, y - image_size//2))
+            if font:
+                text = font.render(npc.name, True, (255, 255, 255))
+                text_rect = text.get_rect(center=(int(x), int(y + image_size//2 + 10)))
+                screen.blit(text, text_rect)
+            return
+        except Exception as e:
+            print(f"Error loading NPC image: {e}")
+    radius = int(15 * scale)
+    color = npc.display_color if hasattr(npc, 'display_color') and npc.display_color else (255, 0, 0)
+    pygame.draw.circle(screen, color, (int(x), int(y)), radius)
+    if font:
+        text = font.render(npc.name, True, (255, 255, 255))
+        text_rect = text.get_rect(center=(int(x), int(y + radius + 10)))
+        screen.blit(text, text_rect)
 
