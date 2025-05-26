@@ -209,8 +209,8 @@
       ],
       "direction": "none",
       "size": [
-        80,
-        80
+        30,
+        30
       ],
       "interactions": {
         "press": null,
@@ -229,8 +229,8 @@
       ],
       "direction": "none",
       "size": [
-        80,
-        80
+        50,
+        50
       ],
       "interactions": {
         "read": null,
@@ -244,13 +244,13 @@
       "name": "table_living_room",
       "description": "一個優雅的客廳桌子，上面放著一些小物品。",
       "position": [
-        240,
-        278
+        380,
+        150
       ],
       "direction": "south",
       "size": [
-        80,
-        80
+        150,
+        120
       ],
       "interactions": {
         "inspect": null
@@ -261,13 +261,13 @@
       "name": "sofa",
       "description": "一個舒適的沙發，上面放著一些小物品。",
       "position": [
-        400,
+        380,
         0
       ],
       "direction": "west",
       "size": [
-        80,
-        80
+        140,
+        120
       ],
       "interactions": {
         "inspect": null
@@ -278,13 +278,13 @@
       "name": "piano",
       "description": "一個優雅的鋼琴，上面放著一些小物品。",
       "position": [
-        289,
-        50
+        200,
+        5
       ],
       "direction": "west",
       "size": [
-        80,
-        80
+        120,
+        100
       ],
       "interactions": {
         "play": null,
@@ -298,13 +298,13 @@
       "name": "table_study",
       "description": "一個優雅的書房桌子，上面放著一些小物品。",
       "position": [
-        825,
-        685
+        725,
+        655
       ],
       "direction": "east",
       "size": [
-        80,
-        80
+        130,
+        100
       ],
       "interactions": {
         "inspect": null
@@ -315,13 +315,13 @@
       "name": "bookshelf",
       "description": "一個精緻的書架，上面放著一些小物品。",
       "position": [
-        571,
-        721
+        731,
+        441
       ],
       "direction": "east",
       "size": [
-        80,
-        80
+        120,
+        100
       ],
       "interactions": {
         "inspect": null
@@ -332,13 +332,13 @@
       "name": "pencil",
       "description": "一個精緻的鉛筆，非常適合寫字。",
       "position": [
-        825,
+        755,
         652
       ],
       "direction": "none",
       "size": [
-        80,
-        80
+        30,
+        30
       ],
       "interactions": {
         "write": {
@@ -359,8 +359,8 @@
       ],
       "direction": "none",
       "size": [
-        80,
-        80
+        40,
+        40
       ],
       "interactions": {
         "cut": {
@@ -376,13 +376,13 @@
       "name": "sink",
       "description": "一個精緻的水槽，非常適合清洗小物品。",
       "position": [
-        39,
+        200,
         616
       ],
       "direction": "east",
       "size": [
-        80,
-        80
+        90,
+        90
       ],
       "interactions": {
         "clean": null,
@@ -396,13 +396,13 @@
       "name": "refrigerator",
       "description": "一個精緻的冰箱，上面放著一些小物品。",
       "position": [
-        200,
-        666
+        10,
+        660
       ],
       "direction": "west",
       "size": [
         80,
-        80
+        100
       ],
       "interactions": {
         "open": null,
@@ -414,13 +414,13 @@
       "name": "bed",
       "description": "一個精緻的床，上面放著一些小物品。",
       "position": [
-        641,
-        133
+        601,
+        0
       ],
       "direction": "east",
       "size": [
-        80,
-        80
+        150,
+        140
       ],
       "interactions": {
         "inspect": null
@@ -431,13 +431,13 @@
       "name": "diary",
       "description": "一本皮革裝訂的日記，頁面鑲有金邊，準備記錄思想和回憶。",
       "position": [
-        790,
-        123
+        730,
+        15
       ],
       "direction": "none",
       "size": [
-        100,
-        100
+        50,
+        50
       ],
       "interactions": {
         "read": null,
@@ -459,8 +459,8 @@
       ],
       "direction": "none",
       "size": [
-        80,
-        80
+        30,
+        30
       ],
       "interactions": {
         "write": {
@@ -476,13 +476,13 @@
       "name": "table_bedroom",
       "description": "一個精緻的床，上面放著一些小物品。",
       "position": [
-        838,
-        137
+        738,
+        15
       ],
       "direction": "west",
       "size": [
-        80,
-        80
+        130,
+        100
       ],
       "interactions": {
         "inspect": null
@@ -493,13 +493,13 @@
       "name": "bathtub",
       "description": "一個精緻的浴缸，上面放著一些小物品。",
       "position": [
-        1094,
+        1025,
         133
       ],
       "direction": "west",
       "size": [
-        80,
-        80
+        120,
+        120
       ],
       "interactions": {
         "inspect": null
@@ -510,8 +510,8 @@
       "name": "shower",
       "description": "一個精緻的淋浴，上面放著一些小物品。",
       "position": [
-        1090,
-        197
+        840,
+        90
       ],
       "direction": "west",
       "size": [
@@ -527,13 +527,13 @@
       "name": "tissue",
       "description": "一包精緻的衛生紙，非常適合使用。",
       "position": [
-        1108,
+        1008,
         249
       ],
       "direction": "none",
       "size": [
-        100,
-        100
+        40,
+        40
       ],
       "interactions": {
         "use": null,
@@ -545,13 +545,13 @@
       "name": "toilet",
       "description": "一個精緻的廁所，上面放著一些小物品。",
       "position": [
-        1084,
-        290
+        1040,
+        250
       ],
       "direction": "east",
       "size": [
-        80,
-        80
+        85,
+        85
       ],
       "interactions": {
         "inspect": null
@@ -562,13 +562,13 @@
       "name": "book",
       "description": "A book for reading.",
       "position": [
-        571,
-        721
+        781,
+        660
       ],
       "direction": "none",
       "size": [
-        80,
-        80
+        40,
+        40
       ],
       "interactions": {
         "read": null,

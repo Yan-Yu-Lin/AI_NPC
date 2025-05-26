@@ -672,7 +672,7 @@ class NPC(BaseModel):
             if self.path_to_follow:
                 self.current_path_segment_target_space_name = self.path_to_follow.pop(0)
                 print(f"DEBUG: move_to_space - 找到路徑: {path}. 設置目標段落: {self.current_path_segment_target_space_name}")
-                self.thinking_status = f"正在透過 A* 路徑前往 {final_target_name}。下一站: {self.current_path_segment_target_space_name}"
+                #self.thinking_status = f"前往 {final_target_name}。"
                 
                 # 新增：如果當前空間和下一個空間有連接點，使用路徑規劃器規劃到門口的路徑
                 if self.current_path_segment_target_space_name in all_world_spaces:
@@ -687,7 +687,7 @@ class NPC(BaseModel):
                             # 使用路徑規劃器規劃到連接點的路徑
                             self.plan_path_to_target()
                 
-                return f"開始 A* 路徑前往 {final_target_name}。下一站: {self.current_path_segment_target_space_name}"
+                return f"前往 {final_target_name}。"
             else: 
                 # 路徑只有 [current, target]，所以 path[1:] 就是 [target]，pop 後 path_to_follow 為空
                 self.current_path_segment_target_space_name = final_target_name  # 直接設置為目標
