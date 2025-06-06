@@ -28,8 +28,6 @@ class Space(BaseModel):
     connected_spaces: List["Space"] = Field(default_factory=list)
     items: List["Item"] = Field(default_factory=list) # Item is already defined
     npcs: List["NPC"] = Field(default_factory=list)  # NPC will be a forward reference here
-    display_pos: Tuple[int, int] = (0, 0)
-    display_size: Tuple[int, int] = (0, 0)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -85,10 +83,8 @@ class NPC(BaseModel):
     inventory: "Inventory"  # Inventory is defined above
     history: List[Dict[str, str]] = Field(default_factory=list)
     first_tick: bool = True
-    display_color: Optional[Tuple[int, int, int]] = None
     radius: Optional[int] = None
     position: Optional[Tuple[int, int]] = None
-    display_pos: Optional[Tuple[int, int]] = None
 
     class EnterSpaceAction(BaseModel):
         action_type: Literal["enter_space"]
@@ -1201,8 +1197,6 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
             connected_spaces = [],  # 後續連接
             items = [],  # 後續添加物品
             npcs = [],  # 後續添加 NPC
-            display_pos = tuple(space_data["space_positions"]),
-            display_size = tuple(space_data["space_size"]),
         )
     
     # 第二步: 創建所有物品
@@ -1263,7 +1257,7 @@ def build_world_from_data(world_data: Dict[str, Any]) -> Dict[str, Any]:
                 current_space = starting_space,
                 inventory = inventory,
                 history = npc_data.get("history", []),
-                display_pos = tuple(npc_pos),
+                radius = npc_data.get("radius"),
                 position = tuple(npc_pos)
             )
             
